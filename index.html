@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover, interactive-widget=resizes-content">
   <title>Quick Note</title>
   <meta name="description" content="Minimal private note and communication tool">
   <meta name="theme-color" content="#111827">
@@ -12,7 +12,7 @@
   <link rel="manifest" href="manifest.json">
   <link rel="apple-touch-icon" href="icon-192.png">
   <link rel="icon" type="image/png" href="icon-192.png">
-  <link rel="stylesheet" href="style.css?v=18">
+  <link rel="stylesheet" href="style.css?v=22">
   <!-- Config & Firebase SDKs -->
   <script src="config.js?v=8"></script>
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
@@ -57,12 +57,12 @@
     <footer class="chat-footer">
       <div class="compose-box">
         <div class="input-row">
-          <input type="text" id="fakeInput" class="fake-input" placeholder="Type a message..." autocomplete="off">
+          <textarea id="fakeInput" class="fake-input" placeholder="Type a message..." rows="1" autocomplete="off"></textarea>
         </div>
         
         <div class="secret-input-wrapper" id="secretInputWrapper">
           <span class="secret-label">Note:</span>
-          <input type="text" id="secretInput" class="secret-input" placeholder="Additional details..." autocomplete="off">
+          <textarea id="secretInput" class="secret-input" placeholder="Additional details..." rows="1" autocomplete="off"></textarea>
         </div>
 
         <div class="controls-row">
@@ -210,6 +210,6 @@
     </div>
   </div>
 
-  <script src="app.js?v=20"></script>
+  <script src="app.js?v=22"></script>
 </body>
 </html>

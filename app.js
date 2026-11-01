@@ -144,6 +144,19 @@ function initUI() {
   partnerNameDisplay.textContent = 'Quick Note';
   updateRoleUI();
   updateModeBadge();
+
+  // Keep app pinned and header sticky when mobile keyboard opens
+  if (window.visualViewport) {
+    const updateViewportHeight = () => {
+      document.documentElement.style.setProperty('--app-height', `${window.visualViewport.height}px`);
+      window.scrollTo(0, 0);
+    };
+    window.visualViewport.addEventListener('resize', updateViewportHeight);
+    window.visualViewport.addEventListener('scroll', () => {
+      window.scrollTo(0, 0);
+    });
+    updateViewportHeight();
+  }
 }
 
 function updateRoleUI() {
@@ -417,16 +430,27 @@ function doSendMessage(fakeText, secretText) {
   }
 
   fakeInput.value = '';
+  fakeInput.style.height = 'auto';
   secretInput.value = '';
+  secretInput.style.height = 'auto';
   secretInputWrapper.classList.remove('active');
   toggleSecretBtn.classList.remove('active');
   toggleSecretBtn.innerHTML = '<span>+ Attach Note</span>';
   fakeInput.focus();
 }
 
+function autoResizeTextarea(el) {
+  el.style.height = 'auto';
+  el.style.height = Math.min(el.scrollHeight, 120) + 'px';
+}
+
+fakeInput.addEventListener('input', () => autoResizeTextarea(fakeInput));
+secretInput.addEventListener('input', () => autoResizeTextarea(secretInput));
+
 sendBtn.addEventListener('click', sendMessage);
 fakeInput.addEventListener('keydown', (e) => {
-  if (e.key === 'Enter') {
+  if (e.key === 'Enter' && !e.shiftKey) {
+    e.preventDefault();
     if (secretInputWrapper.classList.contains('active')) {
       secretInput.focus();
     } else {
@@ -435,7 +459,10 @@ fakeInput.addEventListener('keydown', (e) => {
   }
 });
 secretInput.addEventListener('keydown', (e) => {
-  if (e.key === 'Enter') sendMessage();
+  if (e.key === 'Enter' && !e.shiftKey) {
+    e.preventDefault();
+    sendMessage();
+  }
 });
 
 // PIN Logic & Modal
