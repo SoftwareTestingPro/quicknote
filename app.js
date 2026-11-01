@@ -260,7 +260,14 @@ function renderMessages() {
       }
     }
 
-    const timeStr = msg.timestamp ? new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '';
+    let timeStr = '';
+    if (msg.timestamp) {
+      const d = new Date(msg.timestamp);
+      const day = String(d.getDate()).padStart(2, '0');
+      const month = String(d.getMonth() + 1).padStart(2, '0');
+      const time = d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+      timeStr = `${day}/${month} ${time}`;
+    }
 
     bubble.innerHTML = `
       <div class="msg-meta-header">
