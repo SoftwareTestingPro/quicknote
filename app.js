@@ -221,7 +221,8 @@ toggleSecretBtn.addEventListener('click', () => {
 });
 
 // Render Messages
-function renderMessages() {
+function renderMessages(preserveScroll = false) {
+  const previousScrollTop = chatMessagesEl.scrollTop;
   chatMessagesEl.innerHTML = '';
 
   if (state.messages.length === 0) {
@@ -310,16 +311,23 @@ function renderMessages() {
     chatMessagesEl.appendChild(row);
   });
 
-  chatMessagesEl.scrollTop = chatMessagesEl.scrollHeight;
+  if (preserveScroll) {
+    chatMessagesEl.scrollTop = previousScrollTop;
+  } else {
+    chatMessagesEl.scrollTop = chatMessagesEl.scrollHeight;
+  }
 }
 
 // Permanent Delete Function
+let isDeleting = false;
 function deleteNote(msg) {
+  isDeleting = true;
   if (state.dbRef) {
     if (msg.key) {
       state.dbRef.child(msg.key).remove().then(() => {
         showToast('Note deleted');
       }).catch((err) => {
+        isDeleting = false;
         showToast('Delete error: ' + err.message);
       });
     } else {
@@ -330,6 +338,8 @@ function deleteNote(msg) {
             child.ref.remove();
           });
           showToast('Note deleted');
+        } else {
+          isDeleting = false;
         }
       });
     }
@@ -337,7 +347,8 @@ function deleteNote(msg) {
     // Local storage delete
     state.messages = state.messages.filter(m => m.id !== msg.id);
     localStorage.setItem('local_chat_' + state.roomId, JSON.stringify(state.messages));
-    renderMessages();
+    renderMessages(true);
+    isDeleting = false;
     showToast('Note deleted');
   }
 }
@@ -703,6 +714,10 @@ function initFirebase() {
     listenForIncomingCalls();
 
     state.dbRef.limitToLast(100).on('value', (snapshot) => {
+      const isScrolledUp = (chatMessagesEl.scrollHeight - chatMessagesEl.scrollTop - chatMessagesEl.clientHeight) > 80;
+      const shouldPreserve = isDeleting || isScrolledUp;
+      isDeleting = false;
+
       state.messages = [];
       if (snapshot.exists()) {
         snapshot.forEach((child) => {
@@ -713,7 +728,7 @@ function initFirebase() {
       }
       connectionStatus.textContent = 'All notes synced';
       connectionStatus.style.color = 'var(--text-muted)';
-      renderMessages();
+      renderMessages(shouldPreserve);
     }, (error) => {
       console.error('Database sync error:', error);
       connectionStatus.textContent = 'Sync offline';
