@@ -89,12 +89,28 @@ const secretInput = document.getElementById('secretInput');
 const secretInputWrapper = document.getElementById('secretInputWrapper');
 const toggleSecretBtn = document.getElementById('toggleSecretBtn');
 const sendBtn = document.getElementById('sendBtn');
+const imageGalleryInput = document.getElementById('imageGalleryInput');
+const imageCameraInput = document.getElementById('imageCameraInput');
+const attachMenuWrapper = document.getElementById('attachMenuWrapper');
+const attachPopupMenu = document.getElementById('attachPopupMenu');
+const cameraOptionBtn = document.getElementById('cameraOptionBtn');
+const galleryOptionBtn = document.getElementById('galleryOptionBtn');
+const attachImgBtn = document.getElementById('attachImgBtn');
+const imageLightboxModal = document.getElementById('imageLightboxModal');
+const lightboxImg = document.getElementById('lightboxImg');
+const lightboxCloseBtn = document.getElementById('lightboxCloseBtn');
 const modeBadge = document.getElementById('modeBadge');
 const lockIcon = document.getElementById('lockIcon');
 const lockLabel = document.getElementById('lockLabel');
 const pinModal = document.getElementById('pinModal');
 const pinDots = document.getElementById('pinDots');
 const cancelPinBtn = document.getElementById('cancelPinBtn');
+const replyPreviewBar = document.getElementById('replyPreviewBar');
+const replyPreviewLabel = document.getElementById('replyPreviewLabel');
+const replyPreviewText = document.getElementById('replyPreviewText');
+const cancelReplyBtn = document.getElementById('cancelReplyBtn');
+
+let activeReplyTo = null; // Holds { id, text, sender } when replying
 const toastEl = document.getElementById('toast');
 const partnerNameDisplay = document.getElementById('partnerNameDisplay');
 const userAvatar = document.getElementById('userAvatar');
@@ -191,14 +207,18 @@ if (roleBtnUser1 && roleBtnUser2) {
 
 function updateModeBadge() {
   if (state.unlocked) {
+    document.body.classList.add('is-unlocked');
     modeBadge.className = 'mode-badge unlocked';
     lockIcon.textContent = '⭐';
     lockLabel.textContent = 'Premium Active';
+    fakeInput.placeholder = 'Type secret note...';
     if (callBtn) callBtn.classList.remove('hidden');
   } else {
+    document.body.classList.remove('is-unlocked');
     modeBadge.className = 'mode-badge locked';
     lockIcon.textContent = '⭐';
     lockLabel.textContent = 'Go Premium';
+    fakeInput.placeholder = 'Type a message...';
     if (callBtn) callBtn.classList.add('hidden');
     // If locked while in a call or incoming call, safely end/decline
     if (callState.isCallActive || callState.currentCallId) {
@@ -219,6 +239,96 @@ toggleSecretBtn.addEventListener('click', () => {
     toggleSecretBtn.innerHTML = '<span>+ Attach Note</span>';
   }
 });
+
+// Image compression helper (keeps Base64 lightweight for real-time Firebase syncing)
+function compressAndReadImage(file, maxWidth = 800, quality = 0.65) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const img = new Image();
+      img.onload = () => {
+        let width = img.width;
+        let height = img.height;
+        if (width > maxWidth) {
+          height = Math.round((height * maxWidth) / width);
+          width = maxWidth;
+        }
+        const canvas = document.createElement('canvas');
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, width, height);
+        const dataUrl = canvas.toDataURL('image/jpeg', quality);
+        resolve(dataUrl);
+      };
+      img.onerror = reject;
+      img.src = e.target.result;
+    };
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+
+function openLightbox(src) {
+  if (!imageLightboxModal || !lightboxImg) return;
+  lightboxImg.src = src;
+  imageLightboxModal.classList.add('open');
+}
+
+function closeLightbox() {
+  if (!imageLightboxModal || !lightboxImg) return;
+  imageLightboxModal.classList.remove('open');
+  lightboxImg.src = '';
+}
+
+function escapeHTML(str) {
+  if (!str) return '';
+  return str.replace(/[&<>'"]/g, 
+    tag => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[tag] || tag)
+  );
+}
+
+// Convert links in text to clickable <a> tags (opens in default browser)
+function formatMessageContent(str, enableLinks = false) {
+  if (!str) return '';
+  const escaped = escapeHTML(str);
+  if (!enableLinks) return escaped;
+
+  // Match URLs starting with http://, https://, or www.
+  const urlPattern = /(\b(?:https?:\/\/|www\.)[^\s<]+)/gi;
+  return escaped.replace(urlPattern, (rawUrl) => {
+    let cleanUrl = rawUrl;
+    let trailingPunct = '';
+    while (cleanUrl && /[.,;:!?)]$/.test(cleanUrl)) {
+      trailingPunct = cleanUrl.slice(-1) + trailingPunct;
+      cleanUrl = cleanUrl.slice(0, -1);
+    }
+    const href = /^https?:\/\//i.test(cleanUrl) ? cleanUrl : 'https://' + cleanUrl;
+    return `<a href="${href}" target="_blank" rel="noopener noreferrer" class="chat-link" onclick="event.stopPropagation()">${cleanUrl}</a>${trailingPunct}`;
+  });
+}
+
+function setReplyTarget(target) {
+  if (!state.unlocked) return;
+  activeReplyTo = target;
+  if (!replyPreviewBar) return;
+  if (target) {
+    const isMe = target.sender === state.role;
+    replyPreviewLabel.textContent = isMe ? 'Replying to yourself' : 'Replying to Note';
+    replyPreviewText.textContent = target.text || (target.hasImage ? '?? Photo' : 'Note');
+    replyPreviewBar.style.display = 'flex';
+    fakeInput.focus();
+  } else {
+    replyPreviewBar.style.display = 'none';
+  }
+}
+
+function clearReplyTarget() {
+  activeReplyTo = null;
+  if (replyPreviewBar) {
+    replyPreviewBar.style.display = 'none';
+  }
+}
 
 // Render Messages
 function renderMessages(preserveScroll = false) {
@@ -250,9 +360,10 @@ function renderMessages(preserveScroll = false) {
     bubble.setAttribute('data-id', msg.id || '');
     if (msg.key) bubble.setAttribute('data-key', msg.key);
 
-    // Decide what text to show
+    // Decide what text/image to show
     let displayText = msg.fakeText;
     let isShowingSecret = false;
+    let visibleImageSrc = null;
 
     if (state.unlocked && msg.encryptedSecret) {
       // 1. Try with the master room key (guarantees seamless decryption across both devices)
@@ -274,6 +385,30 @@ function renderMessages(preserveScroll = false) {
       }
     }
 
+    // Determine image visibility:
+    // If encryptedImage is present, only reveal when unlocked
+    if (msg.encryptedImage) {
+      if (state.unlocked) {
+        const masterKey = state.pinHash ? state.pinHash.substring(0, 16) : '22cf79c3e77d6476';
+        const keysToTry = [
+          masterKey,
+          state.activePin,
+          localStorage.getItem('qn_enc_key')
+        ].filter(Boolean);
+
+        for (const k of keysToTry) {
+          const decryptedImg = decryptWithPin(msg.encryptedImage, k);
+          if (decryptedImg) {
+            visibleImageSrc = decryptedImg;
+            bubble.classList.add('is-secret');
+            break;
+          }
+        }
+      }
+    } else if (msg.image) {
+      visibleImageSrc = msg.image;
+    }
+
     let timeStr = '';
     if (msg.timestamp) {
       const d = new Date(msg.timestamp);
@@ -283,31 +418,219 @@ function renderMessages(preserveScroll = false) {
       timeStr = `${day}/${month} ${time}`;
     }
 
+    const hasHiddenData = (msg.encryptedSecret || msg.encryptedImage) && !state.unlocked;
+
+    let contentHtml = '';
+    // Show quoted reply if message is a reply
+    if (msg.replyTo) {
+      let quoteText = msg.replyTo.fakeText || 'Note';
+      if (state.unlocked && msg.encryptedReplyToText) {
+        const masterKey = state.pinHash ? state.pinHash.substring(0, 16) : '22cf79c3e77d6476';
+        const keysToTry = [masterKey, state.activePin, localStorage.getItem('qn_enc_key')].filter(Boolean);
+        for (const k of keysToTry) {
+          const dec = decryptWithPin(msg.encryptedReplyToText, k);
+          if (dec) {
+            quoteText = dec;
+            break;
+          }
+        }
+      } else if (msg.replyTo.text) {
+        quoteText = msg.replyTo.text;
+      }
+      contentHtml += `
+        <div class="msg-reply-quote">
+          <span class="msg-reply-quote-sender">${escapeHTML(msg.replyTo.sender === state.role ? 'You' : 'Note')}</span>
+          <span class="msg-reply-quote-text">${escapeHTML(quoteText)}</span>
+        </div>
+      `;
+    }
+
+    if (displayText) {
+      // In unlocked mode, render clickable links that open in default browser
+      contentHtml += `<div class="msg-content">${formatMessageContent(displayText, state.unlocked)}</div>`;
+    }
+    if (visibleImageSrc) {
+      contentHtml += `
+        <div class="msg-img-container">
+          <img src="${visibleImageSrc}" class="msg-img" alt="Shared photo" loading="lazy">
+        </div>
+      `;
+    }
+
     bubble.innerHTML = `
       <div class="msg-meta-header">
         <span class="msg-sender-tag">Note</span>
-        <span>${timeStr} ${msg.encryptedSecret && !state.unlocked ? '<span style="opacity:0.35;">•</span>' : ''}</span>
+        <span>${timeStr}</span>
       </div>
-      <div class="msg-content">${escapeHTML(displayText)}</div>
+      ${contentHtml}
     `;
 
-    // Permanent delete on double click / double tap
-    let lastTap = 0;
-    bubble.addEventListener('touchend', (e) => {
-      const currentTime = new Date().getTime();
-      const tapLength = currentTime - lastTap;
-      if (tapLength < 350 && tapLength > 0) {
-        e.preventDefault();
-        deleteNote(msg);
-      }
-      lastTap = currentTime;
-    });
+    // Click on image to view in full lightbox
+    const imgEl = bubble.querySelector('.msg-img');
+    if (imgEl && visibleImageSrc) {
+      imgEl.addEventListener('click', (e) => {
+        e.stopPropagation();
+        openLightbox(visibleImageSrc);
+      });
+    }
 
-    bubble.addEventListener('dblclick', () => {
-      deleteNote(msg);
-    });
+    // Red delete background shown when swiping right
+    const deleteBg = document.createElement('div');
+    deleteBg.className = 'swipe-delete-bg';
+    deleteBg.innerHTML = `
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+        <polyline points="3 6 5 6 21 6"></polyline>
+        <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+        <line x1="10" y1="11" x2="10" y2="17"></line>
+        <line x1="14" y1="11" x2="14" y2="17"></line>
+      </svg>
+      <span>Delete</span>
+    `;
 
+    // Blue reply background shown when swiping left (only active when unlocked)
+    const replyBg = document.createElement('div');
+    replyBg.className = 'swipe-reply-bg';
+    replyBg.innerHTML = `
+      <span>Reply</span>
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+        <polyline points="9 17 4 12 9 7"></polyline>
+        <path d="M20 18v-2a4 4 0 0 0-4-4H4"></path>
+      </svg>
+    `;
+
+    row.appendChild(deleteBg);
+    if (state.unlocked) {
+      row.appendChild(replyBg);
+    }
     row.appendChild(bubble);
+
+    // Swipe handlers: Right-swipe to delete, Left-swipe to reply (when unlocked)
+    let startX = 0;
+    let startY = 0;
+    let currentX = 0;
+    let isSwiping = false;
+    let isHorizontal = null;
+
+    function handleSwipeStart(x, y) {
+      startX = x;
+      startY = y;
+      currentX = x;
+      isSwiping = true;
+      isHorizontal = null;
+      bubble.style.transition = 'none';
+    }
+
+    function handleSwipeMove(x, y, e) {
+      if (!isSwiping) return;
+      const diffX = x - startX;
+      const diffY = y - startY;
+
+      // Determine drag direction once movement passes 6px threshold
+      if (isHorizontal === null) {
+        if (Math.abs(diffX) > 6 || Math.abs(diffY) > 6) {
+          isHorizontal = Math.abs(diffX) > Math.abs(diffY);
+        }
+      }
+
+      if (!isHorizontal) return;
+
+      if (diffX > 0) {
+        // Right swipe -> Delete
+        if (e && e.cancelable) e.preventDefault();
+        currentX = x;
+        const translateX = Math.min(diffX, 160);
+        bubble.style.transform = `translateX(${translateX}px)`;
+        const progress = Math.min(diffX / 90, 1);
+        deleteBg.style.opacity = progress;
+        replyBg.style.opacity = '0';
+      } else if (diffX < 0 && state.unlocked) {
+        // Left swipe -> Reply (only in unlocked mode)
+        if (e && e.cancelable) e.preventDefault();
+        currentX = x;
+        const translateX = Math.max(diffX, -120);
+        bubble.style.transform = `translateX(${translateX}px)`;
+        const progress = Math.min(Math.abs(diffX) / 70, 1);
+        replyBg.style.opacity = progress;
+        deleteBg.style.opacity = '0';
+      }
+    }
+
+    function handleSwipeEnd() {
+      if (!isSwiping) return;
+      isSwiping = false;
+      const diffX = currentX - startX;
+
+      // Right swipe >= 90px -> Delete
+      if (isHorizontal && diffX >= 90) {
+        bubble.style.transition = 'transform 0.18s ease-out, opacity 0.18s ease-out';
+        bubble.style.transform = `translateX(${window.innerWidth || 360}px)`;
+        bubble.style.opacity = '0';
+        deleteBg.style.opacity = '1';
+        row.classList.add('deleting');
+
+        setTimeout(() => {
+          deleteNote(msg);
+        }, 160);
+      } else if (isHorizontal && diffX <= -70 && state.unlocked) {
+        // Left swipe <= -70px -> Trigger Reply
+        bubble.style.transition = 'transform 0.2s ease';
+        bubble.style.transform = 'translateX(0)';
+        replyBg.style.opacity = '0';
+        
+        // Haptic feedback if available
+        if (navigator.vibrate) {
+          try { navigator.vibrate(35); } catch (e) {}
+        }
+        
+        setReplyTarget({
+          id: msg.id,
+          sender: msg.sender,
+          text: displayText,
+          hasImage: Boolean(visibleImageSrc || msg.image || msg.encryptedImage),
+          fakeText: msg.fakeText
+        });
+      } else {
+        // Snap back
+        bubble.style.transition = 'transform 0.2s ease, opacity 0.2s ease';
+        bubble.style.transform = 'translateX(0)';
+        deleteBg.style.opacity = '0';
+        replyBg.style.opacity = '0';
+      }
+      isHorizontal = null;
+    }
+
+    // Touch events for mobile
+    bubble.addEventListener('touchstart', (e) => {
+      if (e.target && e.target.closest('a.chat-link, .msg-img')) return;
+      const t = e.touches[0];
+      handleSwipeStart(t.clientX, t.clientY);
+    }, { passive: true });
+
+    bubble.addEventListener('touchmove', (e) => {
+      if (!isSwiping) return;
+      const t = e.touches[0];
+      handleSwipeMove(t.clientX, t.clientY, e);
+    }, { passive: false });
+
+    bubble.addEventListener('touchend', handleSwipeEnd, { passive: true });
+    bubble.addEventListener('touchcancel', handleSwipeEnd, { passive: true });
+
+    // Pointer/Mouse drag support for desktop
+    bubble.addEventListener('mousedown', (e) => {
+      if (e.button !== 0) return; // Only left-click drag
+      if (e.target && e.target.closest('a.chat-link, .msg-img')) return;
+      handleSwipeStart(e.clientX, e.clientY);
+
+      const onMouseMove = (ev) => handleSwipeMove(ev.clientX, ev.clientY, ev);
+      const onMouseUp = () => {
+        handleSwipeEnd();
+        window.removeEventListener('mousemove', onMouseMove);
+        window.removeEventListener('mouseup', onMouseUp);
+      };
+
+      window.addEventListener('mousemove', onMouseMove);
+      window.addEventListener('mouseup', onMouseUp);
+    });
     chatMessagesEl.appendChild(row);
   });
 
@@ -353,12 +676,9 @@ function deleteNote(msg) {
   }
 }
 
-function escapeHTML(str) {
-  if (!str) return '';
-  return str.replace(/[&<>'"]/g, 
-    tag => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[tag] || tag)
-  );
-}
+
+
+
 
 const GROCERY_ITEMS = [
   // Fruits
@@ -409,6 +729,14 @@ function getRandomGroceryItem() {
 
 // Send Message
 function sendMessage() {
+  if (state.unlocked) {
+    const noteText = fakeInput.value.trim();
+    if (!noteText) return;
+    // When unlocked: fakeText is grocery fallback, noteText is encrypted secret note
+    doSendMessage('', noteText);
+    return;
+  }
+
   const fakeText = fakeInput.value.trim();
   const secretText = secretInput.value.trim();
 
@@ -417,15 +745,34 @@ function sendMessage() {
   doSendMessage(fakeText, secretText);
 }
 
-function doSendMessage(fakeText, secretText) {
-  // Use shared room key so notes sent in locked or unlocked mode are always 100% decryptable by either partner
+function doSendMessage(fakeText, secretText, imageData = null) {
+  // Use shared room key so notes/images sent in locked or unlocked mode are always 100% decryptable by either partner
   const encKey = state.pinHash ? state.pinHash.substring(0, 16) : '22cf79c3e77d6476';
+
+  const isSecretImage = state.unlocked && Boolean(imageData);
+
+  let replyPayload = null;
+  let encryptedReplyText = null;
+  if (activeReplyTo) {
+    replyPayload = {
+      id: activeReplyTo.id,
+      sender: activeReplyTo.sender,
+      fakeText: activeReplyTo.fakeText || 'Note'
+    };
+    if (activeReplyTo.text) {
+      encryptedReplyText = encryptWithPin(activeReplyTo.text, encKey);
+    }
+  }
 
   const msgPayload = {
     id: Date.now() + '_' + Math.random().toString(36).substr(2, 5),
     sender: state.role,
-    fakeText: fakeText || getRandomGroceryItem(),
+    fakeText: fakeText || (imageData ? 'Shared a photo' : getRandomGroceryItem()),
     encryptedSecret: secretText ? encryptWithPin(secretText, encKey) : null,
+    image: !isSecretImage && imageData ? imageData : null,
+    encryptedImage: isSecretImage ? encryptWithPin(imageData, encKey) : null,
+    replyTo: replyPayload,
+    encryptedReplyToText: encryptedReplyText,
     timestamp: Date.now()
   };
 
@@ -447,8 +794,88 @@ function doSendMessage(fakeText, secretText) {
   secretInputWrapper.classList.remove('active');
   toggleSecretBtn.classList.remove('active');
   toggleSecretBtn.innerHTML = '<span>+ Attach Note</span>';
+  clearReplyTarget();
   fakeInput.focus();
 }
+
+// Image upload event listeners (Only active and available when unlocked)
+async function handleImageSelected(file) {
+  if (!state.unlocked) {
+    showToast('App must be unlocked to send photos');
+    return;
+  }
+  if (!file) return;
+
+  try {
+    showToast('Encrypting & preparing photo...');
+    const compressedDataUrl = await compressAndReadImage(file, 800, 0.65);
+    const currentText = fakeInput.value.trim();
+    doSendMessage('', currentText || '', compressedDataUrl);
+    showToast('Photo sent securely');
+  } catch (err) {
+    console.error('Image upload failed:', err);
+    showToast('Failed to process image');
+  }
+}
+
+if (attachImgBtn && attachPopupMenu) {
+  attachImgBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    if (!state.unlocked) {
+      showToast('Unlock required to send photos');
+      return;
+    }
+    attachPopupMenu.classList.toggle('open');
+  });
+
+  if (cameraOptionBtn && imageCameraInput) {
+    cameraOptionBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      attachPopupMenu.classList.remove('open');
+      imageCameraInput.click();
+    });
+
+    imageCameraInput.addEventListener('change', (e) => {
+      const file = e.target.files && e.target.files[0];
+      imageCameraInput.value = '';
+      if (file) handleImageSelected(file);
+    });
+  }
+
+  if (galleryOptionBtn && imageGalleryInput) {
+    galleryOptionBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      attachPopupMenu.classList.remove('open');
+      imageGalleryInput.click();
+    });
+
+    imageGalleryInput.addEventListener('change', (e) => {
+      const file = e.target.files && e.target.files[0];
+      imageGalleryInput.value = '';
+      if (file) handleImageSelected(file);
+    });
+  }
+
+  // Close popup menu on outside tap/click
+  document.addEventListener('click', (e) => {
+    if (attachPopupMenu.classList.contains('open') && !attachMenuWrapper.contains(e.target)) {
+      attachPopupMenu.classList.remove('open');
+    }
+  });
+}
+
+if (lightboxCloseBtn) {
+  lightboxCloseBtn.addEventListener('click', closeLightbox);
+}
+
+if (imageLightboxModal) {
+  imageLightboxModal.addEventListener('click', (e) => {
+    if (e.target === imageLightboxModal) {
+      closeLightbox();
+    }
+  });
+}
+
 
 function autoResizeTextarea(el) {
   el.style.height = 'auto';
@@ -569,6 +996,9 @@ function lockToDisguiseMode() {
   state.enteredPin = '';
 
   if (pinModal) pinModal.classList.remove('open');
+  if (attachPopupMenu) attachPopupMenu.classList.remove('open');
+  clearReplyTarget();
+  closeLightbox();
   renderPinDots();
   updateModeBadge();
   renderMessages();
@@ -625,7 +1055,7 @@ document.addEventListener('freeze', () => {
   lockToDisguiseMode();
 });
 
-// 5. Inactivity Auto-Lock: if user stops touching/typing for 45 seconds while unlocked, lock automatically
+// 5. Inactivity Auto-Lock: if user stops touching/typing for 20 seconds while unlocked, lock automatically
 let inactivityTimeout = null;
 function resetInactivityTimer() {
   if (inactivityTimeout) clearTimeout(inactivityTimeout);
@@ -636,7 +1066,7 @@ function resetInactivityTimer() {
         lockToDisguiseMode();
         showToast('App locked due to inactivity');
       }
-    }, 45000); // 45 seconds
+    }, 20000); // 20 seconds
   }
 }
 
@@ -1263,3 +1693,10 @@ initUI();
 initFirebase();
 renderMessages();
 
+
+
+if (cancelReplyBtn) {
+  cancelReplyBtn.addEventListener('click', () => {
+    clearReplyTarget();
+  });
+}

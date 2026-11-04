@@ -1,4 +1,4 @@
-const CACHE_NAME = 'dualchat-v23';
+const CACHE_NAME = 'dualchat-v34';
 const ASSETS = [
   './',
   './index.html',
