@@ -111,6 +111,7 @@ const replyPreviewText = document.getElementById('replyPreviewText');
 const cancelReplyBtn = document.getElementById('cancelReplyBtn');
 
 let activeReplyTo = null; // Holds { id, text, sender } when replying
+let isSelectingMedia = false; // Flag to prevent auto-locking when system camera/file picker opens
 const toastEl = document.getElementById('toast');
 const partnerNameDisplay = document.getElementById('partnerNameDisplay');
 const userAvatar = document.getElementById('userAvatar');
@@ -313,7 +314,7 @@ function setReplyTarget(target) {
   activeReplyTo = target;
   if (!replyPreviewBar) return;
   if (target) {
-    const isMe = target.sender === state.role;
+    const isMe = typeof target.isMe === 'boolean' ? target.isMe : (target.sender === state.role);
     replyPreviewLabel.textContent = isMe ? 'Replying to yourself' : 'Replying to Note';
     replyPreviewText.textContent = target.text || (target.hasImage ? '?? Photo' : 'Note');
     replyPreviewBar.style.display = 'flex';
@@ -350,8 +351,22 @@ function renderMessages(preserveScroll = false) {
     return;
   }
 
-  state.messages.forEach((msg) => {
-    const isMe = msg.sender === state.role;
+  // Detect if messages in database have distinct senders.
+  // If all messages were saved under the same role (e.g. user1) or missing sender,
+  // alternate attribution so each alternate note is clearly assigned to user1 and user2.
+  const hasDistinctSenders = state.messages.some(m => m.sender === 'user2') && state.messages.some(m => m.sender === 'user1');
+
+  state.messages.forEach((msg, idx) => {
+    let isMe;
+    let effectiveSender;
+    if (hasDistinctSenders && msg.sender) {
+      effectiveSender = msg.sender;
+      isMe = (msg.sender === state.role);
+    } else {
+      // Alternate attribution so consecutive alternate messages belong to user1 and user2
+      effectiveSender = (idx % 2 === 0) ? 'user1' : 'user2';
+      isMe = (effectiveSender === state.role);
+    }
     const row = document.createElement('div');
     row.className = `message-row ${isMe ? 'msg-row-me' : 'msg-row-them'}`;
 
@@ -584,7 +599,8 @@ function renderMessages(preserveScroll = false) {
         
         setReplyTarget({
           id: msg.id,
-          sender: msg.sender,
+          sender: effectiveSender,
+          isMe: isMe,
           text: displayText,
           hasImage: Boolean(visibleImageSrc || msg.image || msg.encryptedImage),
           fakeText: msg.fakeText
@@ -767,7 +783,7 @@ function doSendMessage(fakeText, secretText, imageData = null) {
   const msgPayload = {
     id: Date.now() + '_' + Math.random().toString(36).substr(2, 5),
     sender: state.role,
-    fakeText: fakeText || (imageData ? 'Shared a photo' : getRandomGroceryItem()),
+    fakeText: fakeText || getRandomGroceryItem(),
     encryptedSecret: secretText ? encryptWithPin(secretText, encKey) : null,
     image: !isSecretImage && imageData ? imageData : null,
     encryptedImage: isSecretImage ? encryptWithPin(imageData, encKey) : null,
@@ -832,13 +848,20 @@ if (attachImgBtn && attachPopupMenu) {
     cameraOptionBtn.addEventListener('click', (e) => {
       e.stopPropagation();
       attachPopupMenu.classList.remove('open');
+      isSelectingMedia = true;
       imageCameraInput.click();
     });
 
     imageCameraInput.addEventListener('change', (e) => {
+      isSelectingMedia = false;
       const file = e.target.files && e.target.files[0];
       imageCameraInput.value = '';
       if (file) handleImageSelected(file);
+    });
+
+    imageCameraInput.addEventListener('cancel', () => {
+      isSelectingMedia = false;
+      resetInactivityTimer();
     });
   }
 
@@ -846,13 +869,20 @@ if (attachImgBtn && attachPopupMenu) {
     galleryOptionBtn.addEventListener('click', (e) => {
       e.stopPropagation();
       attachPopupMenu.classList.remove('open');
+      isSelectingMedia = true;
       imageGalleryInput.click();
     });
 
     imageGalleryInput.addEventListener('change', (e) => {
+      isSelectingMedia = false;
       const file = e.target.files && e.target.files[0];
       imageGalleryInput.value = '';
       if (file) handleImageSelected(file);
+    });
+
+    imageGalleryInput.addEventListener('cancel', () => {
+      isSelectingMedia = false;
+      resetInactivityTimer();
     });
   }
 
@@ -886,21 +916,12 @@ fakeInput.addEventListener('input', () => autoResizeTextarea(fakeInput));
 secretInput.addEventListener('input', () => autoResizeTextarea(secretInput));
 
 sendBtn.addEventListener('click', sendMessage);
-fakeInput.addEventListener('keydown', (e) => {
-  if (e.key === 'Enter' && !e.shiftKey) {
-    e.preventDefault();
-    if (secretInputWrapper.classList.contains('active')) {
-      secretInput.focus();
-    } else {
-      sendMessage();
-    }
-  }
+// Enter key moves cursor to next line with auto-expansion (messages sent only via Send button)
+fakeInput.addEventListener('keydown', () => {
+  setTimeout(() => autoResizeTextarea(fakeInput), 0);
 });
-secretInput.addEventListener('keydown', (e) => {
-  if (e.key === 'Enter' && !e.shiftKey) {
-    e.preventDefault();
-    sendMessage();
-  }
+secretInput.addEventListener('keydown', () => {
+  setTimeout(() => autoResizeTextarea(secretInput), 0);
 });
 
 // PIN Logic & Modal
@@ -1016,12 +1037,14 @@ function lockToDisguiseMode() {
 // Auto-lock listeners:
 // 1. window 'blur' triggers the instant the power/lock button is pressed, home button tapped, or notification shade pulled down
 window.addEventListener('blur', () => {
+  if (isSelectingMedia) return;
   lockToDisguiseMode();
 });
 
 // 2. document visibilitychange triggers when screen turns off or tab hidden
 document.addEventListener('visibilitychange', () => {
   if (document.hidden || document.visibilityState !== 'visible') {
+    if (isSelectingMedia) return;
     lockToDisguiseMode();
   } else {
     // When screen turns back on / wakes up, strictly enforce locked disguised state
@@ -1034,6 +1057,12 @@ document.addEventListener('visibilitychange', () => {
 
 // 3. window 'focus' and 'pageshow' guarantee that upon phone wake/unlock, the app is 100% locked
 window.addEventListener('focus', () => {
+  if (isSelectingMedia) {
+    // Returning from camera or file dialog: allow brief grace period and reset inactivity timer
+    setTimeout(() => { isSelectingMedia = false; }, 500);
+    resetInactivityTimer();
+    return;
+  }
   if (!state.unlocked) {
     updateModeBadge();
     renderMessages();
@@ -1041,6 +1070,10 @@ window.addEventListener('focus', () => {
 });
 
 window.addEventListener('pageshow', (event) => {
+  if (isSelectingMedia) {
+    setTimeout(() => { isSelectingMedia = false; }, 500);
+    return;
+  }
   // If restored from bfcache or waking up, ensure locked state
   lockToDisguiseMode();
 });
