@@ -721,37 +721,60 @@ function deleteNote(msg) {
 
 
 const GROCERY_ITEMS = [
+  // Daily Staples & Dals (Ration)
+  'Aashirvaad Aata', 'Basmati Rice', 'Toor Dal', 'Moong Dal', 'Chana Dal',
+  'Urad Dal', 'Masoor Dal', 'Rajma', 'Chole (Kabuli Chana)', 'Kala Chana',
+  'Poha', 'Sooji (Rawa)', 'Besan', 'Maida', 'Dalia', 'Sabudana',
+  'Tata Salt', 'Sugar (Cheeni)', 'Jaggery (Gud)',
+
+  // Cooking Oils & Ghee
+  'Mustard Oil (Sarson Tel)', 'Refined Oil', 'Fortune Sunflower Oil',
+  'Desi Ghee (Amul)', 'Groundnut Oil',
+
+  // Spices & Masalas (Masaledani)
+  'Haldi Powder (Turmeric)', 'Lal Mirch Powder', 'Dhaniya Powder',
+  'Garam Masala', 'Jeera (Cumin seeds)', 'Rai (Mustard seeds)',
+  'Hing (Asafoetida)', 'Ajwain', 'Kasuri Methi', 'Kali Mirch (Black pepper)',
+  'Elaichi (Cardamom)', 'Laung (Cloves)', 'Tej Patta (Bay leaf)',
+  'Chaat Masala', 'Maggi Masala-e-Magic', 'Kitchen King Masala',
+
+  // Vegetables & Daily Sabzi
+  'Aaloo (Potatoes)', 'Pyaaz (Onions)', 'Tamatar (Tomatoes)', 'Adrak (Ginger)',
+  'Lehsun (Garlic)', 'Hari Mirch (Green chillies)', 'Dhaniya Patta (Coriander)',
+  'Pudina (Mint)', 'Nimbu (Lemons)', 'Bhindi (Lady finger)', 'Gobi (Cauliflower)',
+  'Patta Gobi (Cabbage)', 'Shimla Mirch (Capsicum)', 'Karela (Bitter gourd)',
+  'Lauki (Bottle gourd)', 'Baingan (Brinjal)', 'Palak (Spinach)', 'Matar (Green peas)',
+  'Gajar (Carrots)', 'Mooli (Radish)', 'Kashiphal (Kaddu)', 'Kand (Sweet potato)',
+
   // Fruits
-  'Apples', 'Bananas', 'Oranges', 'Strawberries', 'Blueberries', 'Grapes',
-  'Watermelon', 'Mangoes', 'Pineapple', 'Peaches', 'Pears', 'Kiwi',
-  'Plums', 'Cherries', 'Raspberries', 'Blackberries', 'Pomegranate', 'Cantaloupe',
-  'Papaya', 'Lemons', 'Limes', 'Grapefruit', 'Figs', 'Apricots',
+  'Kela (Bananas)', 'Seb (Apples)', 'Aam (Mangoes)', 'Santra (Oranges)',
+  'Anaar (Pomegranate)', 'Papita (Papaya)', 'Angoor (Grapes)', 'Amrood (Guava)',
+  'Mausambi', 'Chikoo', 'Watermelon (Tarbooz)',
 
-  // Vegetables & Greens
-  'Tomatoes', 'Potatoes', 'Sweet potatoes', 'Red onions', 'Yellow onions',
-  'Garlic', 'Carrots', 'Broccoli', 'Spinach', 'Cucumbers', 'Bell peppers',
-  'Avocados', 'Button mushrooms', 'Lettuce', 'Kale', 'Zucchini', 'Cauliflower',
-  'Cabbage', 'Green beans', 'Asparagus', 'Celery', 'Ginger', 'Chili peppers',
-  'Coriander', 'Mint leaves', 'Basil', 'Spring onions', 'Beetroot', 'Corn',
+  // Dairy & Bakery
+  'Amul Doodh (Full Cream)', 'Amul Taaza Milk', 'Amul Butter', 'Paneer (200g)',
+  'Dahi (Curd)', 'Amul Cheese Slices', 'Amul Fresh Cream',
+  'Brown Bread', 'White Bread', 'Pav (Bun)', 'Rusk (Toast)',
+  'Eggs (1 Dozen)',
 
-  // Dairy & Refrigerated
-  'Whole milk', 'Oat milk', 'Almond milk', 'Greek yogurt', 'Cheddar cheese',
-  'Mozzarella', 'Butter', 'Eggs', 'Heavy cream', 'Tofu', 'Cottage cheese',
-  'Sour cream', 'Parmesan',
+  // Tea, Coffee & Breakfast
+  'Tata Tea Gold', 'Red Label Chai', 'Taj Mahal Tea', 'Nescafe Coffee',
+  'Bru Instant Coffee', 'Bournvita', 'Horlicks', 'Kellogg Corn Flakes',
+  'Oats (Quaker/Saffola)',
 
-  // Bakery & Breakfast
-  'Sourdough bread', 'Whole wheat bread', 'Bagels', 'Tortillas', 'Rolled oats',
-  'Granola', 'Pancake mix', 'Croissants', 'English muffins',
+  // Biscuits & Snacks
+  'Parle-G', 'Good Day Cookies', 'Marie Gold', 'Monaco', 'Bourbon',
+  'Haldiram Bhujia', 'Moong Dal Namkeen', 'Kurkure', 'Lays Chips',
+  'Maggi Noodles', 'Knorr Soup', 'Chings Schezwan Chutney', 'Kissan Tomato Ketchup',
 
-  // Pantry & Staples
-  'Basmati rice', 'Brown rice', 'Quinoa', 'Pasta', 'Spaghetti', 'Noodles',
-  'Olive oil', 'Coconut oil', 'Sesame oil', 'Apple cider vinegar', 'Soy sauce',
-  'Tomato sauce', 'Peanut butter', 'Honey', 'Maple syrup', 'Black pepper',
-  'Sea salt', 'Cumin powder', 'Turmeric', 'Cinnamon', 'Chia seeds',
-
-  // Nuts, Snacks & Beverages
-  'Almonds', 'Walnuts', 'Cashews', 'Pistachios', 'Dark chocolate',
-  'Coffee beans', 'Green tea', 'Earl Grey tea', 'Sparkling water', 'Orange juice'
+  // Household & Cleaning Essentials
+  'Surf Excel / Ariel', 'Vim Dishwash Bar/Liquid', 'Lizol Floor Cleaner',
+  'Harpic Toilet Cleaner', 'Colin Glass Cleaner', 'Dettol Handwash Refill',
+  'Lifebuoy / Dettol Soap', 'Dove / Pears Soap', 'Colgate / Sensodyne Toothpaste',
+  'Toothbrush', 'Head & Shoulders Shampoo', 'Clinic Plus Shampoo',
+  'Coconut Hair Oil (Parachute)', 'Good Knight Liquid Refill', 'Odonil Air Freshener',
+  'Pooja Agarbatti', 'Camphor (Kapoor)', 'Garbage Bags', 'Scotch Brite Scrub Pad',
+  'Jhadu (Broom)', 'Pocha (Floor cloth)', 'Matchbox', 'Tissue Paper Box'
 ];
 
 function getRandomGroceryItem() {
