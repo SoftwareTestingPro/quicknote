@@ -162,18 +162,42 @@ function initUI() {
   updateRoleUI();
   updateModeBadge();
 
-  // Keep app pinned and header sticky when mobile keyboard opens
+  // Keep app pinned, header on top, and chat input visible above mobile keyboard on iOS & Android
   if (window.visualViewport) {
     const updateViewportHeight = () => {
-      document.documentElement.style.setProperty('--app-height', `${window.visualViewport.height}px`);
-      window.scrollTo(0, 0);
+      const vv = window.visualViewport;
+      document.documentElement.style.setProperty('--app-height', `${vv.height}px`);
+      const appEl = document.getElementById('app');
+      if (appEl) {
+        const offsetTop = Math.max(0, vv.offsetTop || 0);
+        appEl.style.top = `${offsetTop}px`;
+      }
+      if (window.scrollY !== 0 || window.scrollX !== 0) {
+        window.scrollTo(0, 0);
+      }
+      if (document.activeElement && (document.activeElement.id === 'fakeInput' || document.activeElement.id === 'secretInput')) {
+        chatMessagesEl.scrollTop = chatMessagesEl.scrollHeight;
+      }
     };
     window.visualViewport.addEventListener('resize', updateViewportHeight);
-    window.visualViewport.addEventListener('scroll', () => {
-      window.scrollTo(0, 0);
+    window.visualViewport.addEventListener('scroll', updateViewportHeight);
+    window.addEventListener('scroll', () => {
+      if (window.scrollY !== 0 || window.scrollX !== 0) {
+        window.scrollTo(0, 0);
+      }
     });
     updateViewportHeight();
   }
+
+  [fakeInput, secretInput].forEach(inp => {
+    if (!inp) return;
+    inp.addEventListener('focus', () => {
+      setTimeout(() => {
+        window.scrollTo(0, 0);
+        chatMessagesEl.scrollTop = chatMessagesEl.scrollHeight;
+      }, 300);
+    });
+  });
 }
 
 function updateRoleUI() {
