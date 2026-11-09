@@ -21,23 +21,31 @@ function isOnlyEmojis(str) {
   if (!str) return false;
   const trimmed = str.trim();
   if (!trimmed) return false;
-  // Match string consisting entirely of unicode emojis, variation selectors, zero-width joiners, and spaces
-  // Supports up to 3 emojis like WhatsApp/Teams
+
   try {
-    const emojiRegex = /^(\p{Extended_Pictographic}|\p{Emoji_Presentation}|\u200d|\ufe0f|\s)+$/u;
+    // Comprehensive emoji regex matching pictographics, presentation forms, regional indicators (flags),
+    // dingbats, keycaps, skin tone modifiers, variation selectors and zero-width joiners.
+    const emojiRegex = /^(?:(?:\p{Extended_Pictographic}|\p{Emoji_Presentation}|[\u{1F1E6}-\u{1F1FF}]|[\u{2600}-\u{27BF}]|[0-9#*]\uFE0F?\u20E3)(?:[\uFE00-\uFE0F\u200D\u{1F3FB}-\u{1F3FF}]|(?:\p{Extended_Pictographic}|\p{Emoji_Presentation}|[\u{1F1E6}-\u{1F1FF}]|[\u{2600}-\u{27BF}]))*|\s)+$/u;
     if (!emojiRegex.test(trimmed)) return false;
 
-    // Use Intl.Segmenter if available or Array.from to count grapheme clusters
+    // Count grapheme clusters (up to 3 emojis like WhatsApp / MS Teams)
     if (typeof Intl !== 'undefined' && Intl.Segmenter) {
       const segmenter = new Intl.Segmenter('en', { granularity: 'grapheme' });
       const segments = Array.from(segmenter.segment(trimmed)).filter(s => s.segment.trim().length > 0);
       return segments.length >= 1 && segments.length <= 3;
     }
-    // Fallback: character count heuristic
+
+    // Fallback: character sequence heuristic
     const cleaned = trimmed.replace(/\s+/g, '');
-    return cleaned.length <= 12;
+    return cleaned.length > 0 && cleaned.length <= 14;
   } catch (e) {
-    return false;
+    // If unicode property escapes fail in older environments, fallback to basic unicode range check
+    try {
+      const basicEmojiRegex = /^([\u200d\ufe0e\ufe0f\u2600-\u27bf\ud83c-\ud83e][\ud000-\udfff]|\s)+$/;
+      return basicEmojiRegex.test(trimmed);
+    } catch (err) {
+      return false;
+    }
   }
 }
 

@@ -1336,22 +1336,34 @@ body.is-unlocked .attach-menu-wrapper {
 }
 
 /* Emoji-only big display (WhatsApp & Teams style) */
-.msg-content.msg-emoji-large {
-  font-size: 38px;
-  line-height: 1.25;
-  letter-spacing: 4px;
-  padding: 4px 0;
-  text-align: left;
-}
-
 .msg-bubble.bubble-emoji-only {
-  background: transparent;
-  border-color: transparent;
-  box-shadow: none;
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  padding: 4px 6px !important;
+  max-width: fit-content !important;
 }
 
 .msg-bubble.bubble-emoji-only:hover {
-  background: rgba(255, 255, 255, 0.04);
+  background: rgba(255, 255, 255, 0.04) !important;
+}
+
+.msg-bubble.bubble-emoji-only .msg-meta-header {
+  display: none !important;
+}
+
+.msg-content.msg-emoji-large {
+  font-size: 52px !important;
+  line-height: 1.2 !important;
+  letter-spacing: 6px !important;
+  padding: 2px 0 !important;
+  text-align: left !important;
+  display: inline-block !important;
+  filter: drop-shadow(0 2px 6px rgba(0, 0, 0, 0.35));
+}
+
+.msg-bubble.bubble-emoji-only .reaction-badge-container {
+  margin-top: 6px;
 }
 
 /* Swipe Left Reply Indicator */
