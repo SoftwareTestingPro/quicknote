@@ -47,10 +47,12 @@ const toggleSecretBtn = document.getElementById('toggleSecretBtn');
 const sendBtn = document.getElementById('sendBtn');
 const imageGalleryInput = document.getElementById('imageGalleryInput');
 const imageCameraInput = document.getElementById('imageCameraInput');
+const imageGifInput = document.getElementById('imageGifInput');
 const attachMenuWrapper = document.getElementById('attachMenuWrapper');
 const attachPopupMenu = document.getElementById('attachPopupMenu');
 const cameraOptionBtn = document.getElementById('cameraOptionBtn');
 const galleryOptionBtn = document.getElementById('galleryOptionBtn');
+const gifOptionBtn = document.getElementById('gifOptionBtn');
 const attachImgBtn = document.getElementById('attachImgBtn');
 const imageLightboxModal = document.getElementById('imageLightboxModal');
 const lightboxImg = document.getElementById('lightboxImg');
@@ -60,6 +62,8 @@ const lockIcon = document.getElementById('lockIcon');
 const lockLabel = document.getElementById('lockLabel');
 const pinModal = document.getElementById('pinModal');
 const pinDots = document.getElementById('pinDots');
+const pinLockoutBanner = document.getElementById('pinLockoutBanner');
+const keypadEl = document.getElementById('keypad');
 const cancelPinBtn = document.getElementById('cancelPinBtn');
 const replyPreviewBar = document.getElementById('replyPreviewBar');
 const replyPreviewLabel = document.getElementById('replyPreviewLabel');
@@ -200,32 +204,135 @@ async function handleImageSelected(file) {
   }
 }
 
+// Client-side Rate Limiting & Lockout System
+const MAX_FAILED_ATTEMPTS = 5;
+let lockoutCountdownInterval = null;
+
+function getFailedAttempts() {
+  const val = parseInt(localStorage.getItem('qn_pin_failed_attempts') || '0', 10);
+  return Number.isFinite(val) ? val : 0;
+}
+
+function setFailedAttempts(count) {
+  localStorage.setItem('qn_pin_failed_attempts', String(count));
+}
+
+function getLockoutEndTime() {
+  const val = parseInt(localStorage.getItem('qn_pin_lockout_until') || '0', 10);
+  return Number.isFinite(val) ? val : 0;
+}
+
+function setLockoutEndTime(timestamp) {
+  localStorage.setItem('qn_pin_lockout_until', String(timestamp));
+}
+
+function checkAndApplyLockoutUI() {
+  const lockoutUntil = getLockoutEndTime();
+  const now = Date.now();
+
+  if (lockoutUntil > now) {
+    const remainingSeconds = Math.ceil((lockoutUntil - now) / 1000);
+    if (keypadEl) keypadEl.classList.add('locked-out');
+    if (pinLockoutBanner) {
+      pinLockoutBanner.textContent = `Too many failed attempts. Try again in ${remainingSeconds}s`;
+      pinLockoutBanner.classList.add('active');
+    }
+
+    if (!lockoutCountdownInterval) {
+      lockoutCountdownInterval = setInterval(() => {
+        const remaining = Math.ceil((getLockoutEndTime() - Date.now()) / 1000);
+        if (remaining <= 0) {
+          clearInterval(lockoutCountdownInterval);
+          lockoutCountdownInterval = null;
+          setLockoutEndTime(0);
+          if (keypadEl) keypadEl.classList.remove('locked-out');
+          if (pinLockoutBanner) {
+            pinLockoutBanner.classList.remove('active');
+            pinLockoutBanner.textContent = '';
+          }
+        } else if (pinLockoutBanner) {
+          pinLockoutBanner.textContent = `Too many failed attempts. Try again in ${remaining}s`;
+        }
+      }, 1000);
+    }
+    return true;
+  } else {
+    if (lockoutCountdownInterval) {
+      clearInterval(lockoutCountdownInterval);
+      lockoutCountdownInterval = null;
+    }
+    if (keypadEl) keypadEl.classList.remove('locked-out');
+    if (pinLockoutBanner) {
+      pinLockoutBanner.classList.remove('active');
+      pinLockoutBanner.textContent = '';
+    }
+    return false;
+  }
+}
+
 // PIN Modal Keypad input
+let isVerifyingPin = false;
+
 async function handlePinInput(char) {
+  if (isVerifyingPin) return;
+  if (checkAndApplyLockoutUI()) {
+    showToast('Keypad locked. Please wait.');
+    return;
+  }
+
   if (state.enteredPin.length < 4) {
     state.enteredPin += String(char).toLowerCase();
     renderPinDots();
 
     if (state.enteredPin.length === 4) {
+      isVerifyingPin = true;
       const typedPin = state.enteredPin;
+
+      // Artificial throttling delay (400ms) to prevent automated script brute-forcing
+      await new Promise(res => setTimeout(res, 400));
       const inputHash = await hashPin(typedPin);
 
-      setTimeout(() => {
-        if (inputHash === state.pinHash.toLowerCase()) {
-          state.unlocked = true;
-          state.activePin = typedPin;
-          localStorage.setItem('qn_enc_key', typedPin);
-          state.enteredPin = '';
-          if (pinModal) pinModal.classList.remove('open');
-          updateModeBadge();
-          renderMessages();
-          resetInactivityTimer();
-        } else {
-          showToast('Invalid subscription key');
-          state.enteredPin = '';
-          renderPinDots();
+      if (inputHash === state.pinHash.toLowerCase()) {
+        // Success: Reset failed attempts & clear lockout
+        setFailedAttempts(0);
+        setLockoutEndTime(0);
+        state.unlocked = true;
+        state.activePin = typedPin;
+        localStorage.setItem('qn_enc_key', typedPin);
+        state.enteredPin = '';
+        if (pinModal) pinModal.classList.remove('open');
+        updateModeBadge();
+        renderMessages();
+        resetInactivityTimer();
+        isVerifyingPin = false;
+      } else {
+        // Failed attempt: Increment counter & calculate lockout
+        const currentFails = getFailedAttempts() + 1;
+        setFailedAttempts(currentFails);
+        state.enteredPin = '';
+        renderPinDots();
+
+        // Shake animation on dots
+        if (pinDots) {
+          pinDots.classList.remove('shake');
+          void pinDots.offsetWidth; // Force reflow
+          pinDots.classList.add('shake');
         }
-      }, 150);
+
+        if (currentFails >= MAX_FAILED_ATTEMPTS) {
+          // Exponential lockout: 30s for 5, 60s for 6, 120s for 7, etc. (capped at 15m)
+          const multiplier = Math.pow(2, currentFails - MAX_FAILED_ATTEMPTS);
+          const lockoutSeconds = Math.min(30 * multiplier, 900);
+          const lockoutUntil = Date.now() + (lockoutSeconds * 1000);
+          setLockoutEndTime(lockoutUntil);
+          checkAndApplyLockoutUI();
+          showToast(`Account locked for ${lockoutSeconds} seconds`);
+        } else {
+          const remainingAttempts = MAX_FAILED_ATTEMPTS - currentFails;
+          showToast(`Invalid key. ${remainingAttempts} attempt${remainingAttempts === 1 ? '' : 's'} remaining.`);
+        }
+        isVerifyingPin = false;
+      }
     }
   }
 }
@@ -286,12 +393,54 @@ function initChatEvents() {
       });
     }
 
+    if (gifOptionBtn && imageGifInput) {
+      gifOptionBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        attachPopupMenu.classList.remove('open');
+        isSelectingMedia = true;
+        imageGifInput.click();
+      });
+
+      imageGifInput.addEventListener('change', (e) => {
+        isSelectingMedia = false;
+        const file = e.target.files && e.target.files[0];
+        imageGifInput.value = '';
+        if (file) handleImageSelected(file);
+      });
+
+      imageGifInput.addEventListener('cancel', () => {
+        isSelectingMedia = false;
+        resetInactivityTimer();
+      });
+    }
+
     document.addEventListener('click', (e) => {
       if (attachPopupMenu.classList.contains('open') && !attachMenuWrapper.contains(e.target)) {
         attachPopupMenu.classList.remove('open');
       }
     });
   }
+
+  // Support GIF / image paste from mobile keyboards (Gboard, Samsung, iOS) & desktop clipboard
+  [fakeInput, secretInput].forEach(inp => {
+    if (!inp) return;
+    inp.addEventListener('paste', (e) => {
+      const clipboardData = e.clipboardData || window.clipboardData;
+      if (!clipboardData || !clipboardData.items) return;
+
+      for (let i = 0; i < clipboardData.items.length; i++) {
+        const item = clipboardData.items[i];
+        if (item.type && item.type.startsWith('image/')) {
+          e.preventDefault();
+          const file = item.getAsFile();
+          if (file) {
+            handleImageSelected(file);
+          }
+          return;
+        }
+      }
+    });
+  });
 
   // Keypad numbers & actions
   document.querySelectorAll('#keypad .key-btn[data-key]').forEach((btn) => {

@@ -121,7 +121,11 @@ function renderMessages(preserveScroll = false) {
     }
 
     if (displayText) {
-      contentHtml += `<div class="msg-content">${formatMessageContent(displayText, state.unlocked)}</div>`;
+      const isEmojiOnly = state.unlocked && !visibleImageSrc && isOnlyEmojis(displayText);
+      if (isEmojiOnly) {
+        bubble.classList.add('bubble-emoji-only');
+      }
+      contentHtml += `<div class="msg-content ${isEmojiOnly ? 'msg-emoji-large' : ''}">${formatMessageContent(displayText, state.unlocked)}</div>`;
     }
     if (visibleImageSrc) {
       contentHtml += `

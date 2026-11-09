@@ -16,6 +16,31 @@ function escapeHTML(str) {
   );
 }
 
+// Check if string contains only emojis (1 to 3 emojis) with optional whitespace
+function isOnlyEmojis(str) {
+  if (!str) return false;
+  const trimmed = str.trim();
+  if (!trimmed) return false;
+  // Match string consisting entirely of unicode emojis, variation selectors, zero-width joiners, and spaces
+  // Supports up to 3 emojis like WhatsApp/Teams
+  try {
+    const emojiRegex = /^(\p{Extended_Pictographic}|\p{Emoji_Presentation}|\u200d|\ufe0f|\s)+$/u;
+    if (!emojiRegex.test(trimmed)) return false;
+
+    // Use Intl.Segmenter if available or Array.from to count grapheme clusters
+    if (typeof Intl !== 'undefined' && Intl.Segmenter) {
+      const segmenter = new Intl.Segmenter('en', { granularity: 'grapheme' });
+      const segments = Array.from(segmenter.segment(trimmed)).filter(s => s.segment.trim().length > 0);
+      return segments.length >= 1 && segments.length <= 3;
+    }
+    // Fallback: character count heuristic
+    const cleaned = trimmed.replace(/\s+/g, '');
+    return cleaned.length <= 12;
+  } catch (e) {
+    return false;
+  }
+}
+
 // Convert links in text to clickable <a> tags (opens in default browser)
 function formatMessageContent(str, enableLinks = false) {
   if (!str) return '';
@@ -36,9 +61,18 @@ function formatMessageContent(str, enableLinks = false) {
   });
 }
 
-// Image compression helper (keeps Base64 lightweight for real-time Firebase syncing)
+// Image & GIF reader helper (preserves full GIF animation without flattening into static canvas)
 function compressAndReadImage(file, maxWidth = 800, quality = 0.65) {
   return new Promise((resolve, reject) => {
+    // If it's an animated GIF, read directly as DataURL to retain all animation frames
+    if (file.type === 'image/gif' || (file.name && file.name.toLowerCase().endsWith('.gif'))) {
+      const reader = new FileReader();
+      reader.onload = (e) => resolve(e.target.result);
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+      return;
+    }
+
     const reader = new FileReader();
     reader.onload = (e) => {
       const img = new Image();
@@ -328,6 +362,9 @@ function initUI() {
       } else {
         state.enteredPin = '';
         renderPinDots();
+        if (typeof checkAndApplyLockoutUI === 'function') {
+          checkAndApplyLockoutUI();
+        }
         if (pinModal) pinModal.classList.add('open');
       }
     });

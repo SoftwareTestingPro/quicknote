@@ -582,10 +582,44 @@ body {
   box-shadow: 0 0 10px var(--accent);
 }
 
+.pin-dots.shake {
+  animation: pin-shake 0.35s ease-in-out;
+}
+
+@keyframes pin-shake {
+  0%, 100% { transform: translateX(0); }
+  20%, 60% { transform: translateX(-8px); }
+  40%, 80% { transform: translateX(8px); }
+}
+
+.pin-lockout-banner {
+  display: none;
+  background: rgba(239, 68, 68, 0.15);
+  border: 1px solid rgba(239, 68, 68, 0.35);
+  color: #fca5a5;
+  font-size: 12.5px;
+  font-weight: 600;
+  padding: 8px 12px;
+  border-radius: 10px;
+  text-align: center;
+  line-height: 1.4;
+}
+
+.pin-lockout-banner.active {
+  display: block;
+}
+
 .keypad {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
   gap: 8px;
+  transition: opacity 0.2s, pointer-events 0.2s;
+}
+
+.keypad.locked-out {
+  opacity: 0.35;
+  pointer-events: none;
+  filter: grayscale(1);
 }
 
 .key-btn {
@@ -1299,6 +1333,25 @@ body.is-unlocked .attach-menu-wrapper {
   white-space: pre-wrap;
   display: block;
   min-height: 20px;
+}
+
+/* Emoji-only big display (WhatsApp & Teams style) */
+.msg-content.msg-emoji-large {
+  font-size: 38px;
+  line-height: 1.25;
+  letter-spacing: 4px;
+  padding: 4px 0;
+  text-align: left;
+}
+
+.msg-bubble.bubble-emoji-only {
+  background: transparent;
+  border-color: transparent;
+  box-shadow: none;
+}
+
+.msg-bubble.bubble-emoji-only:hover {
+  background: rgba(255, 255, 255, 0.04);
 }
 
 /* Swipe Left Reply Indicator */
