@@ -1,10 +1,17 @@
-const CACHE_NAME = 'dualchat-v49';
+const CACHE_NAME = 'dualchat-v52';
 const ASSETS = [
   './',
   './index.html',
   './style.css',
-  './app.js',
-  './config.js',
+  './js/config.js',
+  './js/crypto.js',
+  './js/grocery.js',
+  './js/ui.js',
+  './js/reactions.js',
+  './js/calls.js',
+  './js/database.js',
+  './js/chat.js',
+  './js/app.js',
   './manifest.json',
   './icon-192.png',
   './icon-512.png'
