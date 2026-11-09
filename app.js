@@ -807,6 +807,7 @@ function closeReactionOverlay() {
 
 function toggleMessageReaction(msg, emoji) {
   if (!msg || !emoji) return;
+  closeReactionOverlay();
   const currentRole = state.role || 'user1';
   const existingEmoji = (msg.reactions && msg.reactions[currentRole]) || null;
   const newEmoji = (existingEmoji === emoji) ? null : emoji;
@@ -823,7 +824,7 @@ function toggleMessageReaction(msg, emoji) {
   // Sync to Firebase or LocalStorage
   if (state.dbRef) {
     if (msg.key) {
-      state.dbRef.child(msg.key).child('reactions').child(currentRole).set(newEmojk).catch(err => {
+      state.dbRef.child(msg.key).child('reactions').child(currentRole).set(newEmoji).catch(err => {
         console.error('Failed to update reaction:', err);
       });
     } else {
