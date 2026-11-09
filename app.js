@@ -112,6 +112,24 @@ const cancelReplyBtn = document.getElementById('cancelReplyBtn');
 
 let activeReplyTo = null; // Holds { id, text, sender } when replying
 let isSelectingMedia = false; // Flag to prevent auto-locking when system camera/file picker opens
+
+// Reaction elements & active target
+const reactionOverlay = document.getElementById('reactionOverlay');
+const reactionBar = document.getElementById('reactionBar');
+const reactionExtendedPanel = document.getElementById('reactionExtendedPanel');
+const openEmojiPickerBtn = document.getElementById('openEmojiPickerBtn');
+const closeExtendedPanelBtn = document.getElementById('closeExtendedPanelBtn');
+const extendedEmojiGrid = document.getElementById('extendedEmojiGrid');
+let activeReactionMsg = null;
+
+const EXTENDED_EMOJIS = [
+  '❤️', '😇' , '😎',  '😏',  '😊',  '😉',  '😈',  '😆',  '😅',  '😄',
+  '👍', '👎', '❤', '🔥', '✨', '😂', '❤️',
+  '❤', '😢' , '😮', '❤', '👏', '❤', '🙏',
+  '😊', '😋', '❤', '😍', '❤', '😏',
+  '😐', '😑', '❤', '😓', '❤', '😕',
+  '😗', '😘', '❤', '😚', '❤', '😜'
+];
 const toastEl = document.getElementById('toast');
 const partnerNameDisplay = document.getElementById('partnerNameDisplay');
 const userAvatar = document.getElementById('userAvatar');
@@ -461,7 +479,7 @@ function renderMessages(preserveScroll = false) {
 
     let contentHtml = '';
     // Show quoted reply if message is a reply
-    if (msg.replyTo) {
+    if (state.unlocked && msg.replyTo) {
       let quoteText = msg.replyTo.fakeText || 'Note';
       if (state.unlocked && msg.encryptedReplyToText) {
         const masterKey = state.pinHash ? state.pinHash.substring(0, 16) : '22cf79c3e77d6476';
@@ -496,6 +514,32 @@ function renderMessages(preserveScroll = false) {
       `;
     }
 
+    // Render reactions only when unlocked
+    if (state.unlocked && msg.reactions && typeof msg.reactions === 'object') {
+      const counts = {};
+      const reactedByMe = {};
+      Object.entries(msg.reactions).forEach(([userKey, emojiItem]) => {
+        if (!emojiItem) return;
+        counts[emojiItem] = (counts[emojiItem] || 0) + 1;
+        if (userKey === state.role) {
+          reactedByMe[emojiItem] = true;
+        }
+      });
+      const entries = Object.entries(counts);
+      if (entries.length > 0) {
+        contentHtml += '<div class="reaction-badge-container">';
+        entries.forEach(([emoji, count]) => {
+          const isMine = Boolean(reactedByMe[emoji]);
+          contentHtml += `
+            <div class="reaction-pill ${isMine ? 'reacted-by-me' : ''}" data-emoji="${escapeHTML(emoji)}" title="${isMine ? 'Tap to remove reaction' : 'Tap to react'}">
+              <span>${escapeHTML(emoji)}</span>
+              ${count > 1 ? `<span class="reaction-count">${count}</span>` : ''}
+            </div>`;
+        });
+        contentHtml += '</div>';
+      }
+    }
+
     bubble.innerHTML = `
       <div class="msg-meta-header">
         <span class="msg-sender-tag">Note</span>
@@ -503,6 +547,17 @@ function renderMessages(preserveScroll = false) {
       </div>
       ${contentHtml}
     `;
+
+    // Click on reaction pills to toggle reaction
+    if (state.unlocked) {
+      bubble.querySelectorAll('.reaction-pill').forEach(pill => {
+        pill.addEventListener('click', (e) => {
+          e.stopPropagation();
+          const em = pill.getAttribute('data-emoji');
+          if (em) toggleMessageReaction(msg, em);
+        });
+      });
+    }
 
     // Click on image to view in full lightbox
     const imgEl = bubble.querySelector('.msg-img');
@@ -543,12 +598,35 @@ function renderMessages(preserveScroll = false) {
     }
     row.appendChild(bubble);
 
-    // Swipe handlers: Right-swipe to delete, Left-swipe to reply (when unlocked)
+    // Swipe handlers: Right-swipe to delete, Left-swipe to reply (when unlocked), Long-press for emoji reaction
     let startX = 0;
     let startY = 0;
     let currentX = 0;
     let isSwiping = false;
     let isHorizontal = null;
+    let longPressTimer = null;
+    let isLongPressTriggered = false;
+
+    function startLongPress(clientX, clientY) {
+      clearTimeout(longPressTimer);
+      isLongPressTriggered = false;
+      if (!state.unlocked) return; // Only allow emoji reactions when unlocked
+      longPressTimer = setTimeout(() => {
+        isLongPressTriggered = true;
+        isSwiping = false;
+        if (navigator.vibrate) {
+          try { navigator.vibrate(40); } catch (e) {}
+        }
+        openReactionOverlay(msg, clientX, clientY);
+      }, 450);
+    }
+
+    function cancelLongPress() {
+      if (longPressTimer) {
+        clearTimeout(longPressTimer);
+        longPressTimer = null;
+      }
+    }
 
     function handleSwipeStart(x, y) {
       startX = x;
@@ -563,6 +641,11 @@ function renderMessages(preserveScroll = false) {
       if (!isSwiping) return;
       const diffX = x - startX;
       const diffY = y - startY;
+
+      // Cancel long press on movement
+      if (Math.abs(diffX) > 8 || Math.abs(diffy) > 8) {
+        cancelLongPress();
+      }
 
       // Determine drag direction once movement passes 6px threshold
       if (isHorizontal === null) {
@@ -595,6 +678,12 @@ function renderMessages(preserveScroll = false) {
     }
 
     function handleSwipeEnd() {
+      cancelLongPress();
+      if (isLongPressTriggered) {
+        isLongPressTriggered = false;
+        isSwiping = false;
+        return;
+      }
       if (!isSwiping) return;
       isSwiping = false;
       const diffX = currentX - startX;
@@ -641,8 +730,9 @@ function renderMessages(preserveScroll = false) {
 
     // Touch events for mobile
     bubble.addEventListener('touchstart', (e) => {
-      if (e.target && e.target.closest('a.chat-link, .msg-img')) return;
+      if (e.target && e.target.closest('a.chat-link, .reaction-pill')) return;
       const t = e.touches[0];
+      startLongPress(t.clientX, t.clientY);
       handleSwipeStart(t.clientX, t.clientY);
     }, { passive: true });
 
@@ -658,11 +748,13 @@ function renderMessages(preserveScroll = false) {
     // Pointer/Mouse drag support for desktop
     bubble.addEventListener('mousedown', (e) => {
       if (e.button !== 0) return; // Only left-click drag
-      if (e.target && e.target.closest('a.chat-link, .msg-img')) return;
+      if (e.target && e.target.closest('a.chat-link, .reaction-pill')) return;
+      startLongPress(e.clientX, e.clientY);
       handleSwipeStart(e.clientX, e.clientY);
 
       const onMouseMove = (ev) => handleSwipeMove(ev.clientX, ev.clientY, ev);
       const onMouseUp = () => {
+        cancelLongPress();
         handleSwipeEnd();
         window.removeEventListener('mousemove', onMouseMove);
         window.removeEventListener('mouseup', onMouseUp);
@@ -681,9 +773,130 @@ function renderMessages(preserveScroll = false) {
   }
 }
 
+// Emoji Reaction Logic
+function openReactionOverlay(msg, clientX = null, clientY = null) {
+  if (!reactionOverlay || !reactionBar) return;
+  activeReactionMsg = msg;
+  if (reactionExtendedPanel) reactionExtendedPanel.classList.remove('open');
+  reactionOverlay.classList.add('open');
+
+  // Position reaction bar near touch/click point if provided
+  if (clientY !== null) {
+    const barHeight = 56;
+    const padding = 20;
+    let topPos = clientY - barHeight - 16;
+    if (topPos < padding) {
+      topPos = clientY + 40;
+    }
+    const maxTop = window.innerHeight - barHeight - padding;
+    topPos = Math.min(Math.max(padding, topPos), maxTop);
+    reactionBar.style.position = 'absolute';
+    reactionBar.style.top = `${topPos}px`;
+  } else {
+    reactionBar.style.position = 'relative';
+    reactionBar.style.top = 'auto';
+  }
+}
+
+function closeReactionOverlay() {
+  if (!reactionOverlay) return;
+  reactionOverlay.classList.remove('open');
+  if (reactionExtendedPanel) reactionExtendedPanel.classList.remove('open');
+  activeReactionMsg = null;
+}
+
+function toggleMessageReaction(msg, emoji) {
+  if (!msg || !emoji) return;
+  const currentRole = state.role || 'user1';
+  const existingEmoji = (msg.reactions && msg.reactions[currentRole]) || null;
+  const newEmoji = (existingEmoji === emoji) ? null : emoji;
+
+  // Optimistic local update
+  if (!msg.reactions) msg.reactions = {};
+  if (newEmoji) {
+    msg.reactions[currentRole] = newEmoji;
+  } else {
+    delete msg.reactions[currentRole];
+  }
+  renderMessages(true);
+
+  // Sync to Firebase or LocalStorage
+  if (state.dbRef) {
+    if (msg.key) {
+      state.dbRef.child(msg.key).child('reactions').child(currentRole).set(newEmojk).catch(err => {
+        console.error('Failed to update reaction:', err);
+      });
+    } else {
+      state.dbRef.orderByChild('id').equalTo(msg.id).once('value', (snap) => {
+        if (snap.exists()) {
+          snap.forEach(child => {
+            child.ref.child('reactions').child(currentRole).set(newEmoji);
+          });
+        }
+      });
+    }
+  } else {
+    localStorage.setItem('local_chat_' + state.roomId, JSON.stringify(state.messages));
+  }
+}
+
+if (extendedEmojiGrid) {
+  extendedEmojiGrid.innerHTML = '';
+  EXTENDED_EMOJIS.forEach(emoji => {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'grid-emoji-btn';
+    btn.textContent = emoji;
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      if (activeReactionMsg) {
+        toggleMessageReaction(activeReactionMsg, emoji);
+      }
+      closeReactionOverlay();
+    });
+    extendedEmojiGrid.appendChild(btn);
+  });
+}
+
+if (reactionBar) {
+  reactionBar.querySelectorAll('.reaction-emoji-btn[data-emoji]').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const emoji = btn.getAttribute('data-emoji');
+      if (activeReactionMsg && emoji) {
+        toggleMessageReaction(activeReactionMsg, emoji);
+      }
+      closeReactionOverlay();
+    });
+  });
+}
+
+if (openEmojiPickerBtn && reactionExtendedPanel) {
+  openEmojiPickerBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    reactionExtendedPanel.classList.toggle('open');
+  });
+}
+
+if (closeExtendedPanelBtn && reactionExtendedPanel) {
+  closeExtendedPanelBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    reactionExtendedPanel.classList.remove('open');
+  });
+}
+
+if (reactionOverlay) {
+  reactionOverlay.addEventListener('click', (e) => {
+    if (e.target === reactionOverlay) {
+      closeReactionOverlay();
+    }
+  });
+}
+
 // Permanent Delete Function
 let isDeleting = false;
 function deleteNote(msg) {
+
   isDeleting = true;
   if (state.dbRef) {
     if (msg.key) {
@@ -723,44 +936,44 @@ function deleteNote(msg) {
 const GROCERY_ITEMS = [
   // Daily Staples & Dals (Ration)
   'Aashirvaad Aata', 'Basmati Rice', 'Toor Dal', 'Moong Dal', 'Chana Dal',
-  'Urad Dal', 'Masoor Dal', 'Rajma', 'Chole (Kabuli Chana)', 'Kala Chana',
-  'Poha', 'Sooji (Rawa)', 'Besan', 'Maida', 'Dalia', 'Sabudana',
-  'Tata Salt', 'Sugar (Cheeni)', 'Jaggery (Gud)',
+  'Urad Dal', 'Masoor Dal', 'Rajma', 'Chole', 'Kala Chana',
+  'Poha', 'Sooji', 'Besan', 'Maida', 'Dalia', 'Sabudana',
+  'Tata Salt', 'Sugar', 'Jaggery',
 
   // Cooking Oils & Ghee
-  'Mustard Oil (Sarson Tel)', 'Refined Oil', 'Fortune Sunflower Oil',
-  'Desi Ghee (Amul)', 'Groundnut Oil',
+  'Mustard Oil', 'Refined Oil', 'Fortune Sunflower Oil',
+  'Desi Ghee', 'Groundnut Oil',
 
   // Spices & Masalas (Masaledani)
-  'Haldi Powder (Turmeric)', 'Lal Mirch Powder', 'Dhaniya Powder',
-  'Garam Masala', 'Jeera (Cumin seeds)', 'Rai (Mustard seeds)',
-  'Hing (Asafoetida)', 'Ajwain', 'Kasuri Methi', 'Kali Mirch (Black pepper)',
-  'Elaichi (Cardamom)', 'Laung (Cloves)', 'Tej Patta (Bay leaf)',
+  'Haldi Powder', 'Lal Mirch Powder', 'Dhaniya Powder',
+  'Garam Masala', 'Jeera', 'Rai',
+  'Hing', 'Ajwain', 'Kasuri Methi', 'Kali Mirch',
+  'Elaichi', 'Laung', 'Tej Patta',
   'Chaat Masala', 'Maggi Masala-e-Magic', 'Kitchen King Masala',
 
   // Vegetables & Daily Sabzi
-  'Aaloo (Potatoes)', 'Pyaaz (Onions)', 'Tamatar (Tomatoes)', 'Adrak (Ginger)',
-  'Lehsun (Garlic)', 'Hari Mirch (Green chillies)', 'Dhaniya Patta (Coriander)',
-  'Pudina (Mint)', 'Nimbu (Lemons)', 'Bhindi (Lady finger)', 'Gobi (Cauliflower)',
-  'Patta Gobi (Cabbage)', 'Shimla Mirch (Capsicum)', 'Karela (Bitter gourd)',
-  'Lauki (Bottle gourd)', 'Baingan (Brinjal)', 'Palak (Spinach)', 'Matar (Green peas)',
-  'Gajar (Carrots)', 'Mooli (Radish)', 'Kashiphal (Kaddu)', 'Kand (Sweet potato)',
+  'Aaloo', 'Pyaaz', 'Tamatar', 'Adrak',
+  'Lehsun', 'Hari Mirch', 'Dhaniya Patta',
+  'Pudina', 'Nimbu', 'Bhindi', 'Gobi',
+  'Patta Gobi', 'Shimla Mirch', 'Karela',
+  'Lauki', 'Baingan', 'Palak', 'Matar',
+  'Gajar', 'Mooli', 'Kaddu', 'Sweet Potato',
 
   // Fruits
-  'Kela (Bananas)', 'Seb (Apples)', 'Aam (Mangoes)', 'Santra (Oranges)',
-  'Anaar (Pomegranate)', 'Papita (Papaya)', 'Angoor (Grapes)', 'Amrood (Guava)',
-  'Mausambi', 'Chikoo', 'Watermelon (Tarbooz)',
+  'Kela', 'Seb', 'Aam', 'Santra',
+  'Anaar', 'Papita', 'Angoor', 'Amrood',
+  'Mausambi', 'Chikoo', 'Watermelon',
 
   // Dairy & Bakery
-  'Amul Doodh (Full Cream)', 'Amul Taaza Milk', 'Amul Butter', 'Paneer (200g)',
-  'Dahi (Curd)', 'Amul Cheese Slices', 'Amul Fresh Cream',
-  'Brown Bread', 'White Bread', 'Pav (Bun)', 'Rusk (Toast)',
-  'Eggs (1 Dozen)',
+  'Amul Doodh', 'Amul Taaza Milk', 'Amul Butter', 'Paneer',
+  'Dahi', 'Amul Cheese Slices', 'Amul Fresh Cream',
+  'Brown Bread', 'White Bread', 'Pav', 'Rusk',
+  'Eggs',
 
   // Tea, Coffee & Breakfast
   'Tata Tea Gold', 'Red Label Chai', 'Taj Mahal Tea', 'Nescafe Coffee',
-  'Bru Instant Coffee', 'Bournvita', 'Horlicks', 'Kellogg Corn Flakes',
-  'Oats (Quaker/Saffola)',
+  'Bru Instant Coffee', 'Bournvita', 'Horlicks', 'Corn Flakes',
+  'Oats',
 
   // Biscuits & Snacks
   'Parle-G', 'Good Day Cookies', 'Marie Gold', 'Monaco', 'Bourbon',
@@ -768,13 +981,13 @@ const GROCERY_ITEMS = [
   'Maggi Noodles', 'Knorr Soup', 'Chings Schezwan Chutney', 'Kissan Tomato Ketchup',
 
   // Household & Cleaning Essentials
-  'Surf Excel / Ariel', 'Vim Dishwash Bar/Liquid', 'Lizol Floor Cleaner',
+  'Surf Excel', 'Vim Dishwash Bar', 'Lizol Floor Cleaner',
   'Harpic Toilet Cleaner', 'Colin Glass Cleaner', 'Dettol Handwash Refill',
-  'Lifebuoy / Dettol Soap', 'Dove / Pears Soap', 'Colgate / Sensodyne Toothpaste',
+  'Lifebuoy Soap', 'Dove Soap', 'Colgate Toothpaste',
   'Toothbrush', 'Head & Shoulders Shampoo', 'Clinic Plus Shampoo',
-  'Coconut Hair Oil (Parachute)', 'Good Knight Liquid Refill', 'Odonil Air Freshener',
-  'Pooja Agarbatti', 'Camphor (Kapoor)', 'Garbage Bags', 'Scotch Brite Scrub Pad',
-  'Jhadu (Broom)', 'Pocha (Floor cloth)', 'Matchbox', 'Tissue Paper Box'
+  'Coconut Hair Oil', 'Good Knight Liquid Refill', 'Odonil Air Freshener',
+  'Pooja Agarbatti', 'Kapoor', 'Garbage Bags', 'Scotch Brite Scrub Pad',
+  'Jhadu', 'Pocha', 'Matchbox', 'Tissue Paper Box'
 ];
 
 function getRandomGroceryItem() {
@@ -949,6 +1162,7 @@ if (imageLightboxModal) {
   imageLightboxModal.addEventListener('click', (e) => {
     if (e.target === imageLightboxModal) {
       closeLightbox();
+  closeReactionOverlay();
     }
   });
 }

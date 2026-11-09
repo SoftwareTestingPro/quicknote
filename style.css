@@ -1425,3 +1425,195 @@ body.is-unlocked .attach-menu-wrapper {
   text-overflow: ellipsis;
   max-width: 100%;
 }
+
+
+/* Emoji Reactions on Message Bubbles */
+.reaction-badge-container {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 6px;
+  align-items: center;
+}
+
+.reaction-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  background: rgba(30, 41, 59, 0.85);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 12px;
+  padding: 2px 7px;
+  font-size: 13px;
+  line-height: 1.2;
+  cursor: pointer;
+  transition: transform 0.15s, background 0.15s, border-color 0.15s;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.reaction-pill:hover {
+  background: rgba(51, 65, 85, 0.95);
+  border-color: rgba(255, 255, 255, 0.3);
+  transform: scale(1.05);
+}
+
+.reaction-pill.reacted-by-me {
+  background: rgba(59, 130, 246, 0.25);
+  border-color: #3b82f6;
+}
+
+.reaction-pill .reaction-count {
+  font-size: 11px;
+  font-weight: 600;
+  color: #94a3b8;
+}
+
+.reaction-pill.reacted-by-me .reaction-count {
+  color: #60a5fa;
+}
+
+/* Floating Emoji Reaction Bar Modal / Overlay */
+.reaction-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.55);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  z-index: 10000;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.18s ease;
+  padding: 16px;
+  box-sizing: border-box;
+}
+
+.reaction-overlay.open {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.reaction-bar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(30, 41, 59, 0.95);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 30px;
+  padding: 8px 12px;
+  box-shadow: 0 12px 36px rgba(0, 0, 0, 0.6);
+  transform: scale(0.9);
+  transition: transform 0.18s cubic-bezier(0.16, 1, 0.3, 1);
+  max-width: 95vw;
+  overflow-x: auto;
+}
+
+.reaction-overlay.open .reaction-bar {
+  transform: scale(1);
+}
+
+.reaction-emoji-btn {
+  background: transparent;
+  border: none;
+  font-size: 26px;
+  line-height: 1;
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  cursor: pointer;
+  transition: transform 0.15s, background 0.15s;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.reaction-emoji-btn:hover, .reaction-emoji-btn:active {
+  background: rgba(255, 255, 255, 0.12);
+  transform: scale(1.22);
+}
+
+.reaction-emoji-btn.custom-emoji-picker-btn {
+  font-size: 18px;
+  color: #94a3b8;
+  border: 1px dashed rgba(255, 255, 255, 0.25);
+}
+
+.reaction-emoji-btn.custom-emoji-picker-btn:hover {
+  color: #fff;
+  border-color: #fff;
+}
+
+/* Extended Emoji Grid Panel */
+.reaction-extended-panel {
+  display: none;
+  flex-direction: column;
+  background: rgba(15, 23, 42, 0.98);
+  border: 1px solid var(--border-light);
+  border-radius: 20px;
+  width: 100%;
+  max-width: 380px;
+  max-height: 60vh;
+  margin-top: 14px;
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.7);
+  overflow: hidden;
+  animation: slide-up 0.2s ease-out;
+}
+
+.reaction-extended-panel.open {
+  display: flex;
+}
+
+.extended-panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.extended-panel-close {
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  font-size: 22px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.extended-emoji-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 8px;
+  padding: 14px;
+  overflow-y: auto;
+  max-height: 48vh;
+}
+
+.grid-emoji-btn {
+  background: transparent;
+  border: none;
+  font-size: 24px;
+  padding: 6px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: transform 0.12s, background 0.12s;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.grid-emoji-btn:hover, .grid-emoji-btn:active {
+  background: rgba(255, 255, 255, 0.12);
+  transform: scale(1.2);
+}
