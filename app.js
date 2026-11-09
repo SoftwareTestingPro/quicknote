@@ -418,7 +418,7 @@ function renderMessages(preserveScroll = false) {
     if (msg.key) bubble.setAttribute('data-key', msg.key);
 
     // Decide what text/image to show
-    let displayText = msg.fakeText;
+    let displayText = state.unlocked ? '' : msg.fakeText;
     let isShowingSecret = false;
     let visibleImageSrc = null;
 
@@ -1268,6 +1268,11 @@ function lockToDisguiseMode() {
     clearTimeout(inactivityTimeout);
     inactivityTimeout = null;
   }
+
+  // Blur any active inputs (e.g. keyboard on iOS/Android)
+  if (document.activeElement && typeof document.activeElement.blur === 'function') {
+    document.activeElement.blur();
+  }
   
   // Instant visual cover: veil screen synchronously so no frame can leak
   if (privacyShield) {
@@ -1280,6 +1285,7 @@ function lockToDisguiseMode() {
 
   if (pinModal) pinModal.classList.remove('open');
   if (attachPopupMenu) attachPopupMenu.classList.remove('open');
+  closeReactionOverlay();
   clearReplyTarget();
   closeLightbox();
   renderPinDots();
