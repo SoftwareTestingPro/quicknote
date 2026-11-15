@@ -468,6 +468,7 @@ function initChatEvents() {
 
 // App Initialization
 initUI();
+initNotifications();
 initReactions();
 initCalls();
 initChatEvents();

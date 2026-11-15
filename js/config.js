@@ -9,6 +9,9 @@ window.APP_CONFIG = {
   // One-way cryptographic SHA-256 hash of the default PIN (Cannot be reversed)
   pinHash: '22cf79c3e77d6476dd6eb433b77e1d998023a55bf41fb480f7d79db0266ec8c7',
 
+  // Web Push VAPID Public Key for iOS & Android Push Notifications
+  vapidPublicKey: 'BHwTbrXXumIarIOftkyfx49NT0vsLDSbgx5npcHN4YLaQI01htGN42SYZOjkrPD-Rgrk7h9NZC1Qo1dhd0uiQ3Y',
+
   // Firebase Realtime Database Configuration
   // Paste your Firebase project configuration here:
   firebase: {

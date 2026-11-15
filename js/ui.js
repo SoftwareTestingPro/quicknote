@@ -299,6 +299,9 @@ function initUI() {
       localStorage.setItem('quick_note_role', 'user1');
       updateRoleUI();
       renderMessages();
+      if (typeof syncPushRoleChange === 'function') {
+        syncPushRoleChange();
+      }
       showToast('Device identity set to User 1');
     });
 
@@ -307,6 +310,9 @@ function initUI() {
       localStorage.setItem('quick_note_role', 'user2');
       updateRoleUI();
       renderMessages();
+      if (typeof syncPushRoleChange === 'function') {
+        syncPushRoleChange();
+      }
       showToast('Device identity set to User 2');
     });
   }

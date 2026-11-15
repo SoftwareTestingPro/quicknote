@@ -1,4 +1,4 @@
-const CACHE_NAME = 'dualchat-v56';
+const CACHE_NAME = 'dualchat-v57';
 const ASSETS = [
   './',
   './index.html',
@@ -7,6 +7,7 @@ const ASSETS = [
   './js/crypto.js',
   './js/grocery.js',
   './js/ui.js',
+  './js/notifications.js',
   './js/reactions.js',
   './js/calls.js',
   './js/database.js',
@@ -46,4 +47,57 @@ self.addEventListener('fetch', (e) => {
         .catch(() => caches.match(e.request))
     );
   }
+});
+
+// Push notification event listener (iOS & Android)
+// Always displays disguised, generic text - never exposes private message or sender
+self.addEventListener('push', (e) => {
+  let title = 'Quick Note';
+  let body = 'Quick list has an update for you';
+
+  if (e.data) {
+    try {
+      const data = e.data.json();
+      if (data && data.title) title = data.title;
+      if (data && data.body) body = data.body;
+    } catch (err) {
+      const text = e.data.text();
+      if (text) body = text;
+    }
+  }
+
+  const options = {
+    body: body,
+    icon: 'icon-192.png',
+    badge: 'icon-192.png',
+    tag: 'quick-note-update',
+    renotify: true,
+    vibrate: [150, 80, 150],
+    data: {
+      url: './index.html'
+    }
+  };
+
+  e.waitUntil(
+    self.registration.showNotification(title, options)
+  );
+});
+
+// Click on notification opens/focuses the app
+self.addEventListener('notificationclick', (e) => {
+  e.notification.close();
+  const targetUrl = new URL('./index.html', self.location.origin).href;
+
+  e.waitUntil(
+    clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clientList) => {
+      for (const client of clientList) {
+        if (client.url === targetUrl && 'focus' in client) {
+          return client.focus();
+        }
+      }
+      if (clients.openWindow) {
+        return clients.openWindow(targetUrl);
+      }
+    })
+  );
 });
