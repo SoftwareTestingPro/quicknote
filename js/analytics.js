@@ -204,6 +204,7 @@
     const safeCity = finalCity || 'Unknown';
 
     const visitorRecord = {
+      visitor_id: visitorId,
       city: safeCity,
       latitude: safeLat,
       longitude: safeLon,
@@ -218,11 +219,10 @@
         try {
           const visitorRef = firebase.database().ref('visitors/' + visitorId);
 
-          // 1. Set top-level visitor record
-          visitorRef.set(visitorRecord).then(() => {
-            // 2. Append to 7-day history
-            const historyRef = visitorRef.child('history');
-            historyRef.push({
+          // Update/Set top-level visitor record
+          visitorRef.update(visitorRecord).then(() => {
+            // Append visit to history log
+            visitorRef.child('history').push({
               city: safeCity,
               latitude: safeLat,
               longitude: safeLon,
@@ -230,19 +230,19 @@
               timestamp: Date.now()
             });
 
-            // 3. Remove history older than 7 days
+            // Clean up history older than 7 days
             const sevenDaysAgo = Date.now() - (7 * 24 * 60 * 60 * 1000);
-            historyRef.orderByChild('timestamp').endAt(sevenDaysAgo).once('value', (snap) => {
+            visitorRef.child('history').orderByChild('timestamp').endAt(sevenDaysAgo).once('value', (snap) => {
               if (snap && snap.exists()) {
                 const updates = {};
                 snap.forEach((child) => {
                   updates[child.key] = null;
                 });
-                historyRef.update(updates).catch(() => {});
+                visitorRef.child('history').update(updates).catch(() => {});
               }
             }).catch(() => {});
           }).catch((err) => {
-            console.error('[Analytics] Firebase set failed:', err);
+            console.error('[Analytics] Firebase write failed:', err);
           });
         } catch (err) {
           console.error('[Analytics] Failed to write to Firebase:', err);
