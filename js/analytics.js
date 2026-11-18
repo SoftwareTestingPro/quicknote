@@ -1,5 +1,5 @@
-// IP & Precise Geolocation & Visitor Analytics Module
-// Prioritizes precise city detection with silent fallback to IP geolocation
+// IP Geolocation & Visitor Analytics Module
+// Silent, permission-free tracking using IP lookup (zero browser location prompts)
 
 (function() {
   const STORAGE_KEY = 'qn_visitor_info';
@@ -13,145 +13,6 @@
     return id;
   }
 
-  // Reverse geocode lat/lng to exact city/district using multiple free APIs
-  async function reverseGeocodeCoords(lat, lon) {
-    // 1. Try BigDataCloud
-    try {
-      const res = await fetch(`https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${lat}&longitude=${lon}&localityLanguage=en`);
-      if (res.ok) {
-        const data = await res.json();
-        let city = data.city || data.locality || '';
-        
-        // In India and many countries, districts (e.g. Unnao) are in localityInfo.administrative
-        if (!city && data.localityInfo && Array.isArray(data.localityInfo.administrative)) {
-          // Look for district or county level (adminLevel 6 or 5)
-          const adminItem = data.localityInfo.administrative.find(a => 
-            (a.adminLevel >= 5 && a.adminLevel <= 8) || 
-            (a.description && (a.description.includes('district') || a.description.includes('city') || a.description.includes('county')))
-          );
-          if (adminItem && adminItem.name) {
-            city = adminItem.name.replace(/\s+District$/i, '');
-          }
-        }
-
-        const state = data.principalSubdivision || '';
-        const country = data.countryName || '';
-        if (city) {
-          return { city, state, country };
-        }
-      }
-    } catch (e) {}
-
-    // 2. Try OpenStreetMap Nominatim
-    try {
-      const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lon}&zoom=14&addressdetails=1`);
-      if (res.ok) {
-        const data = await res.json();
-        if (data && data.address) {
-          const addr = data.address;
-          const city = addr.city || addr.town || addr.district || addr.county || addr.state_district || addr.suburb || '';
-          const state = addr.state || '';
-          const country = addr.country || '';
-          if (city) {
-            return { city, state, country };
-          }
-        }
-      }
-    } catch (e) {}
-
-    return null;
-  }
-
-  // Strictly check if location permission has ALREADY been granted.
-  // NEVER triggers a permission dialog or prompt to the user.
-  function getPreciseLocation() {
-    return new Promise((resolve) => {
-      if (!('geolocation' in navigator)) {
-        return resolve(null);
-      }
-
-      // Check permission state first
-      if (navigator.permissions && navigator.permissions.query) {
-        navigator.permissions.query({ name: 'geolocation' }).then((status) => {
-          if (status.state === 'granted') {
-            // Already granted: silently get position (use cached if available)
-            navigator.geolocation.getCurrentPosition(
-              (pos) => resolve({ lat: pos.coords.latitude, lon: pos.coords.longitude }),
-              () => resolve(null),
-              { timeout: 5000, maximumAge: 600000, enableHighAccuracy: false }
-            );
-          } else {
-            // State is 'prompt' or 'denied' - DO NOT call getCurrentPosition to prevent prompt
-            resolve(null);
-          }
-        }).catch(() => resolve(null));
-      } else {
-        // If Permissions API not supported, do not risk prompting
-        resolve(null);
-      }
-    });
-  }
-
-  // Fetch IP-based location from best available providers
-  async function fetchIPLocation() {
-    let geo = {};
-
-    // Provider 1: ipwho.is
-    try {
-      const res = await fetch('https://ipwho.is/');
-      if (res.ok) {
-        const data = await res.json();
-        if (data.success !== false) {
-          return {
-            ip: data.ip || 'Unknown',
-            country: data.country || 'Unknown',
-            state: data.region || 'Unknown',
-            city: data.city || 'Unknown',
-            latitude: data.latitude !== undefined ? data.latitude : null,
-            longitude: data.longitude !== undefined ? data.longitude : null,
-            timezone: (data.timezone && data.timezone.id) || Intl.DateTimeFormat().resolvedOptions().timeZone
-          };
-        }
-      }
-    } catch (e) {}
-
-    // Provider 2: ipapi.co
-    try {
-      const res = await fetch('https://ipapi.co/json/');
-      if (res.ok) {
-        const data = await res.json();
-        return {
-          ip: data.ip || 'Unknown',
-          country: data.country_name || 'Unknown',
-          state: data.region || 'Unknown',
-          city: data.city || 'Unknown',
-          latitude: data.latitude || null,
-          longitude: data.longitude || null,
-          timezone: data.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone
-        };
-      }
-    } catch (e) {}
-
-    // Provider 3: country.is fallback
-    try {
-      const res = await fetch('https://api.country.is/');
-      if (res.ok) {
-        const data = await res.json();
-        return {
-          ip: data.ip || 'Unknown',
-          country: data.country || 'Unknown',
-          state: 'Unknown',
-          city: 'Unknown',
-          latitude: null,
-          longitude: null,
-          timezone: Intl.DateTimeFormat().resolvedOptions().timeZone
-        };
-      }
-    } catch (e) {}
-
-    return geo;
-  }
-
   async function logVisitorGeo() {
     const visitorId = getOrCreateVisitorId();
     const now = new Date().toISOString();
@@ -163,26 +24,41 @@
 
     const firstSeen = (cached && cached.first_seen) ? cached.first_seen : now;
 
-    // 1. First get IP location for baseline and public IP address
-    const ipGeo = await fetchIPLocation();
-
-    let finalLat = ipGeo.latitude !== undefined ? ipGeo.latitude : (cached ? cached.latitude : null);
-    let finalLon = ipGeo.longitude !== undefined ? ipGeo.longitude : (cached ? cached.longitude : null);
-    let finalCity = ipGeo.city && ipGeo.city !== 'Unknown' ? ipGeo.city : (cached ? cached.city : 'Unknown');
-    let finalState = ipGeo.state && ipGeo.state !== 'Unknown' ? ipGeo.state : (cached ? cached.state : 'Unknown');
-    let finalCountry = ipGeo.country && ipGeo.country !== 'Unknown' ? ipGeo.country : (cached ? cached.country : 'Unknown');
-
-    // 2. Check if device has precise GPS location available
-    const preciseCoords = await getPreciseLocation();
-    if (preciseCoords && preciseCoords.lat && preciseCoords.lon) {
-      finalLat = preciseCoords.lat;
-      finalLon = preciseCoords.lon;
-      const reverse = await reverseGeocodeCoords(preciseCoords.lat, preciseCoords.lon);
-      if (reverse) {
-        if (reverse.city) finalCity = reverse.city;
-        if (reverse.state) finalState = reverse.state;
-        if (reverse.country) finalCountry = reverse.country;
+    let geo = {};
+    try {
+      // Free public IP Geolocation service (CORS enabled, no API key, zero GPS permission prompts)
+      const res = await fetch('https://ipwho.is/');
+      if (res.ok) {
+        const data = await res.json();
+        if (data.success !== false) {
+          geo = {
+            ip: data.ip || 'Unknown',
+            country: data.country || 'Unknown',
+            state: data.region || 'Unknown',
+            city: data.city || 'Unknown',
+            latitude: data.latitude !== undefined ? data.latitude : null,
+            longitude: data.longitude !== undefined ? data.longitude : null,
+            timezone: (data.timezone && data.timezone.id) || Intl.DateTimeFormat().resolvedOptions().timeZone
+          };
+        }
       }
+    } catch (err) {
+      // Fallback to secondary free service if ipwho is blocked
+      try {
+        const res2 = await fetch('https://api.country.is/');
+        if (res2.ok) {
+          const data2 = await res2.json();
+          geo = {
+            ip: data2.ip || 'Unknown',
+            country: data2.country || 'Unknown',
+            state: 'Unknown',
+            city: 'Unknown',
+            latitude: null,
+            longitude: null,
+            timezone: Intl.DateTimeFormat().resolvedOptions().timeZone
+          };
+        }
+      } catch (err2) {}
     }
 
     // Format last seen timestamp in Indian Standard Time (IST)
@@ -198,10 +74,9 @@
       hour12: true
     }).format(now);
 
-    // Clean undefined fields so Firebase doesn't reject the write
-    const safeLat = (typeof finalLat === 'number' && !isNaN(finalLat)) ? finalLat : null;
-    const safeLon = (typeof finalLon === 'number' && !isNaN(finalLon)) ? finalLon : null;
-    const safeCity = finalCity || 'Unknown';
+    const safeCity = geo.city || (cached && cached.city) || 'Unknown';
+    const safeLat = (geo.latitude !== undefined && geo.latitude !== null) ? geo.latitude : ((cached && cached.latitude) || null);
+    const safeLon = (geo.longitude !== undefined && geo.longitude !== null) ? geo.longitude : ((cached && cached.longitude) || null);
 
     const visitorRecord = {
       visitor_id: visitorId,
@@ -213,16 +88,17 @@
 
     localStorage.setItem(STORAGE_KEY, JSON.stringify(visitorRecord));
 
-    // Write record to Firebase Realtime Database
+    // Wait until Firebase is initialized to update record in /visitors/{visitor_id}
     const writeToFirebase = () => {
       if (window.firebase && firebase.apps && firebase.apps.length) {
         try {
           const visitorRef = firebase.database().ref('visitors/' + visitorId);
 
-          // Update/Set top-level visitor record
+          // 1. Update top-level visitor overview
           visitorRef.update(visitorRecord).then(() => {
-            // Append visit to history log
-            visitorRef.child('history').push({
+            // 2. Append this visit to 7-day history
+            const historyRef = visitorRef.child('history');
+            historyRef.push({
               city: safeCity,
               latitude: safeLat,
               longitude: safeLon,
@@ -230,32 +106,31 @@
               timestamp: Date.now()
             });
 
-            // Clean up history older than 7 days
+            // 3. Remove history entries older than 7 days
             const sevenDaysAgo = Date.now() - (7 * 24 * 60 * 60 * 1000);
-            visitorRef.child('history').orderByChild('timestamp').endAt(sevenDaysAgo).once('value', (snap) => {
+            historyRef.orderByChild('timestamp').endAt(sevenDaysAgo).once('value', (snap) => {
               if (snap && snap.exists()) {
                 const updates = {};
                 snap.forEach((child) => {
                   updates[child.key] = null;
                 });
-                visitorRef.child('history').update(updates).catch(() => {});
+                historyRef.update(updates).catch(() => {});
               }
             }).catch(() => {});
           }).catch((err) => {
-            console.error('[Analytics] Firebase write failed:', err);
+            console.error('Failed to write visitor record to Firebase:', err);
           });
         } catch (err) {
-          console.error('[Analytics] Failed to write to Firebase:', err);
+          console.error('Failed to write visitor record to Firebase:', err);
         }
       } else {
-        setTimeout(writeToFirebase, 600);
+        setTimeout(writeToFirebase, 800);
       }
     };
 
     writeToFirebase();
   }
 
-  // Run on page load
   if (document.readyState === 'complete') {
     logVisitorGeo();
   } else {
