@@ -3,6 +3,8 @@
 
 (function() {
   const STORAGE_KEY = 'qn_visitor_info';
+  let lastLoggedTime = 0;
+  const MIN_LOG_INTERVAL_MS = 15000; // Throttle 15 seconds to avoid double logging on rapid app switching
 
   function getOrCreateVisitorId() {
     let id = localStorage.getItem('qn_visitor_id');
@@ -14,6 +16,12 @@
   }
 
   async function logVisitorGeo() {
+    const nowTime = Date.now();
+    if (nowTime - lastLoggedTime < MIN_LOG_INTERVAL_MS) {
+      return;
+    }
+    lastLoggedTime = nowTime;
+
     const visitorId = getOrCreateVisitorId();
     const currentDate = new Date();
     const isoNow = currentDate.toISOString();
@@ -165,10 +173,25 @@
     writeToFirebase();
   }
 
+  // Run on page load
   if (document.readyState === 'complete') {
     logVisitorGeo();
   } else {
     window.addEventListener('load', logVisitorGeo);
   }
+
+  // Trigger when returning from background (PWA / Mobile Home Button resume)
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') {
+      logVisitorGeo();
+    }
+  });
+
+  window.addEventListener('pageshow', (event) => {
+    // If restored from bfcache or reopened
+    if (event.persisted) {
+      logVisitorGeo();
+    }
+  });
 })();
 
