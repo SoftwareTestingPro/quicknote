@@ -15,14 +15,15 @@
 
   async function logVisitorGeo() {
     const visitorId = getOrCreateVisitorId();
-    const now = new Date().toISOString();
+    const currentDate = new Date();
+    const isoNow = currentDate.toISOString();
 
     let cached = null;
     try {
       cached = JSON.parse(localStorage.getItem(STORAGE_KEY) || 'null');
     } catch (e) {}
 
-    const firstSeen = (cached && cached.first_seen) ? cached.first_seen : now;
+    const firstSeen = (cached && cached.first_seen) ? cached.first_seen : isoNow;
 
     let geo = {};
     try {
@@ -62,7 +63,6 @@
     }
 
     // Format last seen timestamp in Indian Standard Time (IST)
-    const now = new Date();
     const lastSeenIST = new Intl.DateTimeFormat('en-IN', {
       timeZone: 'Asia/Kolkata',
       year: 'numeric',
@@ -72,7 +72,7 @@
       minute: '2-digit',
       second: '2-digit',
       hour12: true
-    }).format(now);
+    }).format(currentDate);
 
     const safeCity = geo.city || (cached && cached.city) || 'Unknown';
     const safeLat = (geo.latitude !== undefined && geo.latitude !== null) ? geo.latitude : ((cached && cached.latitude) || null);
