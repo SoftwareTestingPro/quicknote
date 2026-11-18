@@ -88,11 +88,59 @@
 
     localStorage.setItem(STORAGE_KEY, JSON.stringify(visitorRecord));
 
-    // Wait until Firebase is initialized to update record in /visitors/{visitor_id}
-    const writeToFirebase = () => {
+    // Helper to get or initialize Firebase database instance directly
+    function getDb() {
       if (window.firebase && firebase.apps && firebase.apps.length) {
+        return firebase.database();
+      }
+      if (window.firebase && window.APP_CONFIG && window.APP_CONFIG.firebase) {
         try {
-          const visitorRef = firebase.database().ref('visitors/' + visitorId);
+          if (!firebase.apps.length) {
+            firebase.initializeApp(window.APP_CONFIG.firebase);
+          }
+          return firebase.database();
+        } catch (e) {
+          if (firebase.apps && firebase.apps.length) return firebase.database();
+        }
+      }
+      return null;
+    }
+
+    // Direct REST fallback in case Firebase SDK is blocked by browser adblocker/client rules
+    function writeViaRest() {
+      if (window.APP_CONFIG && window.APP_CONFIG.firebase && window.APP_CONFIG.firebase.databaseURL) {
+        const dbUrl = window.APP_CONFIG.firebase.databaseURL;
+        // 1. Update overview
+        fetch(`${dbUrl}/visitors/${visitorId}.json`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(visitorRecord)
+        }).then(() => {
+          // 2. Append history
+          fetch(`${dbUrl}/visitors/${visitorId}/history.json`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              city: safeCity,
+              latitude: safeLat,
+              longitude: safeLon,
+              last_seen: lastSeenIST,
+              timestamp: Date.now()
+            })
+          }).catch(() => {});
+        }).catch((err) => {
+          console.error('[Analytics] REST write failed:', err);
+        });
+      }
+    }
+
+    // Write to Firebase Realtime Database
+    let attempts = 0;
+    const writeToFirebase = () => {
+      const db = getDb();
+      if (db) {
+        try {
+          const visitorRef = db.ref('visitors/' + visitorId);
 
           // 1. Update top-level visitor overview
           visitorRef.update(visitorRecord).then(() => {
@@ -118,13 +166,19 @@
               }
             }).catch(() => {});
           }).catch((err) => {
-            console.error('Failed to write visitor record to Firebase:', err);
+            console.error('[Analytics] Firebase SDK write failed, attempting REST fallback:', err);
+            writeViaRest();
           });
         } catch (err) {
-          console.error('Failed to write visitor record to Firebase:', err);
+          console.error('[Analytics] Firebase SDK exception, attempting REST fallback:', err);
+          writeViaRest();
         }
+      } else if (attempts < 10) {
+        attempts++;
+        setTimeout(writeToFirebase, 600);
       } else {
-        setTimeout(writeToFirebase, 800);
+        // SDK not loaded in 6s (e.g. adblocker blocked firebase script) -> use REST API directly
+        writeViaRest();
       }
     };
 
