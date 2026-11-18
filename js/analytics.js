@@ -77,16 +77,20 @@
     const safeCity = geo.city || (cached && cached.city) || 'Unknown';
     const safeLat = (geo.latitude !== undefined && geo.latitude !== null) ? geo.latitude : ((cached && cached.latitude) || null);
     const safeLon = (geo.longitude !== undefined && geo.longitude !== null) ? geo.longitude : ((cached && cached.longitude) || null);
+    const nowEpoch = Date.now();
 
-    const visitorRecord = {
-      visitor_id: visitorId,
+    const visitEntry = {
       city: safeCity,
       latitude: safeLat,
       longitude: safeLon,
-      last_seen: lastSeenIST
+      last_seen: lastSeenIST,
+      timestamp: nowEpoch
     };
 
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(visitorRecord));
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(visitEntry));
+
+    // Inverted timestamp key so the most recent visit is always sorted at the TOP in Firebase console
+    const historyKey = String(9999999999999 - nowEpoch);
 
     // Helper to get or initialize Firebase database instance directly
     function getDb() {
@@ -110,24 +114,11 @@
     function writeViaRest() {
       if (window.APP_CONFIG && window.APP_CONFIG.firebase && window.APP_CONFIG.firebase.databaseURL) {
         const dbUrl = window.APP_CONFIG.firebase.databaseURL;
-        // 1. Update overview
-        fetch(`${dbUrl}/visitors/${visitorId}.json`, {
-          method: 'PATCH',
+        // Append history entry directly under /visitors/{visitorId}/history/{historyKey}
+        fetch(`${dbUrl}/visitors/${visitorId}/history/${historyKey}.json`, {
+          method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(visitorRecord)
-        }).then(() => {
-          // 2. Append history
-          fetch(`${dbUrl}/visitors/${visitorId}/history.json`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              city: safeCity,
-              latitude: safeLat,
-              longitude: safeLon,
-              last_seen: lastSeenIST,
-              timestamp: Date.now()
-            })
-          }).catch(() => {});
+          body: JSON.stringify(visitEntry)
         }).catch((err) => {
           console.error('[Analytics] REST write failed:', err);
         });
@@ -140,21 +131,11 @@
       const db = getDb();
       if (db) {
         try {
-          const visitorRef = db.ref('visitors/' + visitorId);
+          const historyRef = db.ref('visitors/' + visitorId + '/history');
 
-          // 1. Update top-level visitor overview
-          visitorRef.update(visitorRecord).then(() => {
-            // 2. Append this visit to 7-day history
-            const historyRef = visitorRef.child('history');
-            historyRef.push({
-              city: safeCity,
-              latitude: safeLat,
-              longitude: safeLon,
-              last_seen: lastSeenIST,
-              timestamp: Date.now()
-            });
-
-            // 3. Remove history entries older than 7 days
+          // Save under inverted key (newest at the very top)
+          historyRef.child(historyKey).set(visitEntry).then(() => {
+            // Clean up history entries older than 7 days
             const sevenDaysAgo = Date.now() - (7 * 24 * 60 * 60 * 1000);
             historyRef.orderByChild('timestamp').endAt(sevenDaysAgo).once('value', (snap) => {
               if (snap && snap.exists()) {
@@ -177,7 +158,6 @@
         attempts++;
         setTimeout(writeToFirebase, 600);
       } else {
-        // SDK not loaded in 6s (e.g. adblocker blocked firebase script) -> use REST API directly
         writeViaRest();
       }
     };
