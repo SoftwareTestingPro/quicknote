@@ -203,75 +203,52 @@
     const safeLon = (typeof finalLon === 'number' && !isNaN(finalLon)) ? finalLon : null;
     const safeCity = finalCity || 'Unknown';
 
-    const visitEntry = {
+    const visitorRecord = {
       city: safeCity,
       latitude: safeLat,
       longitude: safeLon,
-      last_seen: lastSeenIST,
-      timestamp: Date.now()
+      last_seen: lastSeenIST
     };
 
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(visitEntry));
-
-    // Ensure Firebase is initialized if not yet done by database.js
-    function getDatabase() {
-      if (window.firebase && firebase.apps && firebase.apps.length) {
-        return firebase.database();
-      }
-      if (window.firebase && window.APP_CONFIG && window.APP_CONFIG.firebase) {
-        try {
-          firebase.initializeApp(window.APP_CONFIG.firebase);
-          return firebase.database();
-        } catch (e) {
-          if (firebase.apps.length) return firebase.database();
-        }
-      }
-      return null;
-    }
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(visitorRecord));
 
     // Write record to Firebase Realtime Database
-    // 1. Updates current status at /visitors/{visitor_id}
-    // 2. Appends to /visitors/{visitor_id}/history and prunes entries older than 7 days
-    let attempts = 0;
     const writeToFirebase = () => {
-      const db = getDatabase();
-      if (db) {
+      if (window.firebase && firebase.apps && firebase.apps.length) {
         try {
-          const visitorRef = db.ref('visitors/' + visitorId);
-          
-          // 1. Update latest visitor details
-          visitorRef.child('city').set(safeCity);
-          visitorRef.child('latitude').set(safeLat);
-          visitorRef.child('longitude').set(safeLon);
-          visitorRef.child('last_seen').set(lastSeenIST);
+          const visitorRef = firebase.database().ref('visitors/' + visitorId);
 
-          // 2. Append to 7-day visit history
-          const historyRef = visitorRef.child('history');
-          historyRef.push({
-            city: safeCity,
-            latitude: safeLat,
-            longitude: safeLon,
-            last_seen: lastSeenIST,
-            timestamp: Date.now()
+          // 1. Set top-level visitor record
+          visitorRef.set(visitorRecord).then(() => {
+            // 2. Append to 7-day history
+            const historyRef = visitorRef.child('history');
+            historyRef.push({
+              city: safeCity,
+              latitude: safeLat,
+              longitude: safeLon,
+              last_seen: lastSeenIST,
+              timestamp: Date.now()
+            });
+
+            // 3. Remove history older than 7 days
+            const sevenDaysAgo = Date.now() - (7 * 24 * 60 * 60 * 1000);
+            historyRef.orderByChild('timestamp').endAt(sevenDaysAgo).once('value', (snap) => {
+              if (snap && snap.exists()) {
+                const updates = {};
+                snap.forEach((child) => {
+                  updates[child.key] = null;
+                });
+                historyRef.update(updates).catch(() => {});
+              }
+            }).catch(() => {});
+          }).catch((err) => {
+            console.error('[Analytics] Firebase set failed:', err);
           });
-
-          // 3. Clean up history entries older than 7 days
-          const sevenDaysAgo = Date.now() - (7 * 24 * 60 * 60 * 1000);
-          historyRef.orderByChild('timestamp').endAt(sevenDaysAgo).once('value', (snap) => {
-            if (snap && snap.exists()) {
-              const updates = {};
-              snap.forEach((child) => {
-                updates[child.key] = null;
-              });
-              historyRef.update(updates).catch(() => {});
-            }
-          }).catch(() => {});
         } catch (err) {
           console.error('[Analytics] Failed to write to Firebase:', err);
         }
-      } else if (attempts < 20) {
-        attempts++;
-        setTimeout(writeToFirebase, 500);
+      } else {
+        setTimeout(writeToFirebase, 600);
       }
     };
 
