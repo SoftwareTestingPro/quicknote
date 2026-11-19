@@ -1,7 +1,9 @@
 {
+  "id": "/",
   "name": "Quick Note",
   "short_name": "Quick Note",
-  "start_url": "./index.html",
+  "start_url": "/",
+  "scope": "/",
   "display": "standalone",
   "background_color": "#0b0f19",
   "theme_color": "#111827",

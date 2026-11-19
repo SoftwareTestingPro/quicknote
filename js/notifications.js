@@ -34,7 +34,8 @@ function getAppUrl() {
     // If tested on localhost, direct notifications to the public production URL
     return 'https://quicknote.futurelab.co.in/';
   }
-  return origin + window.location.pathname;
+  // Return clean root URL to match PWA manifest scope
+  return origin + '/';
 }
 
 // Send disguised push notification to partner via ntfy.sh public relay
