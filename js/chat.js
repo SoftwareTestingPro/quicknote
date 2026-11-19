@@ -98,24 +98,69 @@ function renderMessages(preserveScroll = false) {
     let contentHtml = '';
     // Show quoted reply if message is a reply
     if (state.unlocked && msg.replyTo) {
-      let quoteText = msg.replyTo.fakeText || 'Note';
-      if (state.unlocked && msg.encryptedReplyToText) {
-        const masterKey = state.pinHash ? state.pinHash.substring(0, 16) : '22cf79c3e77d6476';
-        const keysToTry = [masterKey, state.activePin, localStorage.getItem('qn_enc_key')].filter(Boolean);
-        for (const k of keysToTry) {
-          const dec = decryptWithPin(msg.encryptedReplyToText, k);
-          if (dec) {
-            quoteText = dec;
-            break;
+      let quoteText = '';
+      let quoteImageSrc = null;
+
+      // Check if original replied message exists in state.messages to fetch decrypted text/image
+      const originalMsg = state.messages.find(m => m.id === msg.replyTo.id);
+      if (originalMsg) {
+        // Decrypt text if original message has secret
+        if (originalMsg.encryptedSecret) {
+          const masterKey = state.pinHash ? state.pinHash.substring(0, 16) : '22cf79c3e77d6476';
+          const keysToTry = [masterKey, state.activePin, localStorage.getItem('qn_enc_key')].filter(Boolean);
+          for (const k of keysToTry) {
+            const dec = decryptWithPin(originalMsg.encryptedSecret, k);
+            if (dec) {
+              quoteText = dec;
+              break;
+            }
           }
         }
-      } else if (msg.replyTo.text) {
-        quoteText = msg.replyTo.text;
+        // Decrypt image if original message has image
+        if (originalMsg.encryptedImage) {
+          const masterKey = state.pinHash ? state.pinHash.substring(0, 16) : '22cf79c3e77d6476';
+          const keysToTry = [masterKey, state.activePin, localStorage.getItem('qn_enc_key')].filter(Boolean);
+          for (const k of keysToTry) {
+            const decImg = decryptWithPin(originalMsg.encryptedImage, k);
+            if (decImg) {
+              quoteImageSrc = decImg;
+              break;
+            }
+          }
+        } else if (originalMsg.image) {
+          quoteImageSrc = originalMsg.image;
+        }
       }
+
+      // Fallback to msg.encryptedReplyToText or msg.replyTo if original message not found
+      if (!quoteText) {
+        if (msg.encryptedReplyToText) {
+          const masterKey = state.pinHash ? state.pinHash.substring(0, 16) : '22cf79c3e77d6476';
+          const keysToTry = [masterKey, state.activePin, localStorage.getItem('qn_enc_key')].filter(Boolean);
+          for (const k of keysToTry) {
+            const dec = decryptWithPin(msg.encryptedReplyToText, k);
+            if (dec) {
+              quoteText = dec;
+              break;
+            }
+          }
+        } else if (msg.replyTo.text) {
+          quoteText = msg.replyTo.text;
+        }
+      }
+
+      // If image exists, show "Photo" label if no text was present
+      if (!quoteText) {
+        quoteText = quoteImageSrc ? '📷 Photo' : (msg.replyTo.fakeText || 'Note');
+      }
+
       contentHtml += `
         <div class="msg-reply-quote">
-          <span class="msg-reply-quote-sender">${escapeHTML(msg.replyTo.sender === state.role ? 'You' : 'Note')}</span>
-          <span class="msg-reply-quote-text">${escapeHTML(quoteText)}</span>
+          <div class="msg-reply-quote-body">
+            <span class="msg-reply-quote-sender">${escapeHTML(msg.replyTo.sender === state.role ? 'You' : 'Note')}</span>
+            <span class="msg-reply-quote-text">${escapeHTML(quoteText)}</span>
+          </div>
+          ${quoteImageSrc ? `<img src="${quoteImageSrc}" class="msg-reply-quote-thumb" alt="Replied thumbnail">` : ''}
         </div>
       `;
     }
@@ -330,6 +375,7 @@ function renderMessages(preserveScroll = false) {
           isMe: isMe,
           text: displayText,
           hasImage: Boolean(visibleImageSrc || msg.image || msg.encryptedImage),
+          imageSrc: visibleImageSrc || null,
           fakeText: msg.fakeText
         });
       } else {

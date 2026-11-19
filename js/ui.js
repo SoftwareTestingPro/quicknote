@@ -133,10 +133,25 @@ function setReplyTarget(target) {
     const isMe = typeof target.isMe === 'boolean' ? target.isMe : (target.sender === state.role);
     replyPreviewLabel.textContent = isMe ? 'Replying to yourself' : 'Replying to Note';
     replyPreviewText.textContent = target.text || (target.hasImage ? '📷 Photo' : 'Note');
+    
+    if (replyPreviewThumb) {
+      if (target.imageSrc) {
+        replyPreviewThumb.src = target.imageSrc;
+        replyPreviewThumb.style.display = 'block';
+      } else {
+        replyPreviewThumb.src = '';
+        replyPreviewThumb.style.display = 'none';
+      }
+    }
+
     replyPreviewBar.style.display = 'flex';
     fakeInput.focus();
   } else {
     replyPreviewBar.style.display = 'none';
+    if (replyPreviewThumb) {
+      replyPreviewThumb.src = '';
+      replyPreviewThumb.style.display = 'none';
+    }
   }
 }
 
@@ -144,6 +159,10 @@ function clearReplyTarget() {
   activeReplyTo = null;
   if (replyPreviewBar) {
     replyPreviewBar.style.display = 'none';
+  }
+  if (replyPreviewThumb) {
+    replyPreviewThumb.src = '';
+    replyPreviewThumb.style.display = 'none';
   }
 }
 

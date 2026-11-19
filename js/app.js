@@ -68,6 +68,7 @@ const cancelPinBtn = document.getElementById('cancelPinBtn');
 const replyPreviewBar = document.getElementById('replyPreviewBar');
 const replyPreviewLabel = document.getElementById('replyPreviewLabel');
 const replyPreviewText = document.getElementById('replyPreviewText');
+const replyPreviewThumb = document.getElementById('replyPreviewThumb');
 const cancelReplyBtn = document.getElementById('cancelReplyBtn');
 
 let activeReplyTo = null; // Holds { id, text, sender } when replying
