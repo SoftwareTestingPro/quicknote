@@ -1,4 +1,4 @@
-const CACHE_NAME = 'dualchat-v77';
+const CACHE_NAME = 'dualchat-v78';
 const ASSETS = [
   './',
   './index.html',
@@ -75,7 +75,7 @@ self.addEventListener('push', (e) => {
     renotify: true,
     vibrate: [150, 80, 150],
     data: {
-      url: './index.html'
+      url: '/'
     }
   };
 

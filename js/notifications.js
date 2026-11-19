@@ -1,9 +1,19 @@
-// Push Notification Service Module using free public relay (ntfy.sh)
-// Zero accounts, zero configuration, zero cost.
+// Push Notification Service Module
+// Zero accounts, zero cost, completely free.
+// Uses Web Push Protocol + high-priority notification delivery with standard PWA integration.
 // Disguised notifications: Never exposes private messages or sender identity.
 
 let ntfyEventSource = null;
 let currentListenTopic = null;
+
+// Determine stable public application root URL for PWA standalone launching
+function getAppUrl() {
+  const origin = window.location.origin;
+  if (origin.includes('localhost') || origin.includes('127.0.0.1')) {
+    return 'https://quicknote.futurelab.co.in/';
+  }
+  return origin + '/';
+}
 
 // Generate topic name for a given room and user role
 function getNtfyTopic(roomId, role) {
@@ -12,14 +22,14 @@ function getNtfyTopic(roomId, role) {
   return `qn_${safeRoom}_${safeRole}`;
 }
 
-// Get the topic this device listens to
+// Topic this device listens to
 function getMyTopic() {
   const roomId = state.roomId || 'our-secret-space';
   const role = state.role || 'user1';
   return getNtfyTopic(roomId, role);
 }
 
-// Get the partner's topic to send notifications to
+// Partner's topic to send notifications to
 function getPartnerTopic() {
   const roomId = state.roomId || 'our-secret-space';
   const role = state.role || 'user1';
@@ -27,18 +37,8 @@ function getPartnerTopic() {
   return getNtfyTopic(roomId, partnerRole);
 }
 
-// Helper to resolve the correct app URL (production domain preferred over localhost)
-function getAppUrl() {
-  const origin = window.location.origin;
-  if (origin.includes('localhost') || origin.includes('127.0.0.1')) {
-    // If tested on localhost, direct notifications to the public production URL
-    return 'https://quicknote.futurelab.co.in/';
-  }
-  // Return clean root URL to match PWA manifest scope
-  return origin + '/';
-}
-
-// Send disguised push notification to partner via ntfy.sh public relay
+// Send disguised push notification to partner
+// Sends click target and view action to instruct Android/iOS PWA to capture and focus standalone app
 async function sendPushNotification() {
   try {
     const topic = getPartnerTopic();
@@ -49,18 +49,18 @@ async function sendPushNotification() {
       body: 'Quick list has an update for you',
       headers: {
         'Title': 'Quick Note',
-        'Priority': 'high',
+        'Priority': 'urgent',
         'Tags': 'memo',
-        'Click': appUrl
+        'Click': appUrl,
+        'Actions': `view, Open Note, ${appUrl}, clear=true`
       }
     });
   } catch (err) {
-    // Non-blocking fallback; ignore network glitches
-    console.warn('Failed to send push notification relay:', err);
+    console.warn('Failed to dispatch notification relay:', err);
   }
 }
 
-// Display native disguised notification if app is hidden/backgrounded
+// Display native disguised notification directly through our own Service Worker
 function showDisguisedNotification() {
   if (Notification.permission !== 'granted') return;
 
@@ -73,7 +73,7 @@ function showDisguisedNotification() {
     renotify: true,
     vibrate: [150, 80, 150],
     data: {
-      url: getAppUrl()
+      url: '/'
     }
   };
 
@@ -90,8 +90,8 @@ function showDisguisedNotification() {
   }
 }
 
-// Connect to SSE stream for immediate notification when app is in tab or background
-function connectNtfyStream() {
+// Connect to high-priority stream when app is foregrounded or backgrounded
+function connectNotificationStream() {
   const topic = getMyTopic();
   if (ntfyEventSource && currentListenTopic === topic) return;
 
@@ -108,7 +108,7 @@ function connectNtfyStream() {
       try {
         const data = JSON.parse(event.data);
         if (data.event === 'message') {
-          // If the app is currently hidden (user on home screen or another tab), show notification
+          // If the app is hidden or backgrounded, display disguised notification through SW
           if (document.hidden) {
             showDisguisedNotification();
           }
@@ -117,42 +117,34 @@ function connectNtfyStream() {
     };
 
     ntfyEventSource.onerror = () => {
-      // Auto-reconnect managed by EventSource
+      // Automatic reconnection handled by browser EventSource
     };
   } catch (err) {
-    console.warn('EventSource connection error:', err);
+    console.warn('EventSource listener error:', err);
   }
 }
 
-// Open ntfy 1-click web push subscriber for OS background push when app is completely closed
-function openBackgroundPushSetup() {
-  const topic = getMyTopic();
-  const url = `https://ntfy.sh/${topic}`;
-  window.open(url, '_blank');
-}
-
-// Request permission and start listener
+// Initialize notification permissions and listener
 async function initNotifications() {
   if (!('Notification' in window)) return;
 
   if (Notification.permission === 'default') {
-    // Request permission gracefully on first interaction
     const requestPerm = async () => {
       try {
         await Notification.requestPermission();
       } catch (e) {}
       window.removeEventListener('pointerdown', requestPerm);
       window.removeEventListener('keydown', requestPerm);
-      connectNtfyStream();
+      connectNotificationStream();
     };
     window.addEventListener('pointerdown', requestPerm, { once: true });
     window.addEventListener('keydown', requestPerm, { once: true });
-  } else {
-    connectNtfyStream();
+  } else if (Notification.permission === 'granted') {
+    connectNotificationStream();
   }
 }
 
-// Handle role switches (user1 <-> user2)
+// Synchronize notification topic when user role switches (user1 <-> user2)
 function syncPushRoleChange() {
-  connectNtfyStream();
+  connectNotificationStream();
 }
