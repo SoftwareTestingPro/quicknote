@@ -1,4 +1,4 @@
-const CACHE_NAME = 'dualchat-v75';
+const CACHE_NAME = 'dualchat-v76';
 const ASSETS = [
   './',
   './index.html',
@@ -87,12 +87,15 @@ self.addEventListener('push', (e) => {
 // Click on notification opens/focuses the app
 self.addEventListener('notificationclick', (e) => {
   e.notification.close();
-  const targetUrl = new URL('./index.html', self.location.origin).href;
+  const rawUrl = (e.notification.data && e.notification.data.url) || self.location.origin;
+  const targetUrl = (rawUrl.includes('localhost') || rawUrl.includes('127.0.0.1'))
+    ? 'https://quicknote.futurelab.co.in/'
+    : (new URL(rawUrl, self.location.origin).href);
 
   e.waitUntil(
     clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clientList) => {
       for (const client of clientList) {
-        if (client.url === targetUrl && 'focus' in client) {
+        if ((client.url === targetUrl || client.url.startsWith(self.location.origin)) && 'focus' in client) {
           return client.focus();
         }
       }

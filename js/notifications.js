@@ -27,11 +27,21 @@ function getPartnerTopic() {
   return getNtfyTopic(roomId, partnerRole);
 }
 
+// Helper to resolve the correct app URL (production domain preferred over localhost)
+function getAppUrl() {
+  const origin = window.location.origin;
+  if (origin.includes('localhost') || origin.includes('127.0.0.1')) {
+    // If tested on localhost, direct notifications to the public production URL
+    return 'https://quicknote.futurelab.co.in/';
+  }
+  return origin + window.location.pathname;
+}
+
 // Send disguised push notification to partner via ntfy.sh public relay
 async function sendPushNotification() {
   try {
     const topic = getPartnerTopic();
-    const appUrl = window.location.origin + window.location.pathname;
+    const appUrl = getAppUrl();
 
     await fetch(`https://ntfy.sh/${topic}`, {
       method: 'POST',
@@ -62,7 +72,7 @@ function showDisguisedNotification() {
     renotify: true,
     vibrate: [150, 80, 150],
     data: {
-      url: window.location.origin + window.location.pathname
+      url: getAppUrl()
     }
   };
 
