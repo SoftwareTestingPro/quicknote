@@ -1,116 +1,147 @@
-// Background Push Notification Service Module (iOS & Android)
-// Completely silent and automated in the background — no UI toggles or prompts in app view.
+// Push Notification Service Module using free public relay (ntfy.sh)
+// Zero accounts, zero configuration, zero cost.
+// Disguised notifications: Never exposes private messages or sender identity.
 
-let pushSubscription = null;
-let hasAttemptedAutoPrompt = false;
+let ntfyEventSource = null;
+let currentListenTopic = null;
 
-// Convert base64url string to Uint8Array for PushManager subscription
-function urlBase64ToUint8Array(base64String) {
-  const padding = '='.repeat((4 - (base64String.length % 4)) % 4);
-  const base64 = (base64String + padding)
-    .replace(/\-/g, '+')
-    .replace(/_/g, '/');
-  const rawData = window.atob(base64);
-  const outputArray = new Uint8Array(rawData.length);
-  for (let i = 0; i < rawData.length; ++i) {
-    outputArray[i] = rawData.charCodeAt(i);
-  }
-  return outputArray;
+// Generate topic name for a given room and user role
+function getNtfyTopic(roomId, role) {
+  const safeRoom = (roomId || 'our-secret-space').toLowerCase().replace(/[^a-z0-9_-]/g, '_');
+  const safeRole = role || 'user1';
+  return `qn_${safeRoom}_${safeRole}`;
 }
 
-// Save subscription to Firebase Realtime Database
-async function savePushSubscriptionToFirebase(subscription) {
-  if (!subscription || !window.APP_CONFIG || !window.APP_CONFIG.firebase) return;
-  const role = state.role || 'user1';
+// Get the topic this device listens to
+function getMyTopic() {
   const roomId = state.roomId || 'our-secret-space';
+  const role = state.role || 'user1';
+  return getNtfyTopic(roomId, role);
+}
 
+// Get the partner's topic to send notifications to
+function getPartnerTopic() {
+  const roomId = state.roomId || 'our-secret-space';
+  const role = state.role || 'user1';
+  const partnerRole = role === 'user1' ? 'user2' : 'user1';
+  return getNtfyTopic(roomId, partnerRole);
+}
+
+// Send disguised push notification to partner via ntfy.sh public relay
+async function sendPushNotification() {
   try {
-    if (window.firebase && firebase.apps.length) {
-      const db = firebase.database();
-      const subJson = subscription.toJSON();
-      await db.ref(`rooms/${roomId}/push_tokens/${role}`).set({
-        endpoint: subJson.endpoint,
-        keys: subJson.keys,
-        updatedAt: Date.now()
-      });
-    }
+    const topic = getPartnerTopic();
+    const appUrl = window.location.origin + window.location.pathname;
+
+    await fetch(`https://ntfy.sh/${topic}`, {
+      method: 'POST',
+      body: 'Quick list has an update for you',
+      headers: {
+        'Title': 'Quick Note',
+        'Priority': 'high',
+        'Tags': 'memo',
+        'Click': appUrl
+      }
+    });
   } catch (err) {
-    console.error('Failed to save push subscription to DB:', err);
+    // Non-blocking fallback; ignore network glitches
+    console.warn('Failed to send push notification relay:', err);
   }
 }
 
-// Silent automatic subscription when permission is already granted or on user interaction
-async function ensureBackgroundPushSubscription(allowPrompt = false) {
-  if (!('serviceWorker' in navigator) || !('PushManager' in window) || !('Notification' in window)) {
-    return;
-  }
+// Display native disguised notification if app is hidden/backgrounded
+function showDisguisedNotification() {
+  if (Notification.permission !== 'granted') return;
 
-  const permission = Notification.permission;
-
-  if (permission === 'denied') {
-    return;
-  }
-
-  // If not granted yet, only ask for permission when a user gesture allows it
-  if (permission !== 'granted') {
-    if (!allowPrompt || hasAttemptedAutoPrompt) return;
-    try {
-      hasAttemptedAutoPrompt = true;
-      const res = await Notification.requestPermission();
-      if (res !== 'granted') return;
-    } catch (e) {
-      return;
+  const title = 'Quick Note';
+  const options = {
+    body: 'Quick list has an update for you',
+    icon: 'icon-192.png',
+    badge: 'icon-192.png',
+    tag: 'quick-note-update',
+    renotify: true,
+    vibrate: [150, 80, 150],
+    data: {
+      url: window.location.origin + window.location.pathname
     }
-  }
-
-  try {
-    const registration = await navigator.serviceWorker.ready;
-    let sub = await registration.pushManager.getSubscription();
-
-    const vapidKey = window.APP_CONFIG && window.APP_CONFIG.vapidPublicKey;
-    if (!vapidKey) return;
-
-    if (!sub) {
-      const convertedKey = urlBase64ToUint8Array(vapidKey);
-      sub = await registration.pushManager.subscribe({
-        userVisibleOnly: true,
-        applicationServerKey: convertedKey
-      });
-    }
-
-    pushSubscription = sub;
-    await savePushSubscriptionToFirebase(sub);
-  } catch (err) {
-    console.error('Background push subscription sync error:', err);
-  }
-}
-
-// Background sync on role change (e.g. User 1 <-> User 2)
-async function syncPushRoleChange() {
-  if (pushSubscription) {
-    await savePushSubscriptionToFirebase(pushSubscription);
-  } else {
-    await ensureBackgroundPushSubscription(false);
-  }
-}
-
-function initNotifications() {
-  if (!('serviceWorker' in navigator) || !('Notification' in window)) return;
-
-  // Check and silently subscribe if already granted
-  navigator.serviceWorker.ready.then(() => {
-    ensureBackgroundPushSubscription(false);
-  });
-
-  // Seamlessly request permission in the background on the user's first natural tap in the app
-  const seamlessBgSubscribe = () => {
-    ensureBackgroundPushSubscription(true);
-    window.removeEventListener('pointerdown', seamlessBgSubscribe);
-    window.removeEventListener('keydown', seamlessBgSubscribe);
   };
 
-  if (Notification.permission === 'default') {
-    window.addEventListener('pointerdown', seamlessBgSubscribe, { once: true });
-    window.addEventListener('keydown', seamlessBgSubscribe, { once: true });
+  if ('serviceWorker' in navigator && navigator.serviceWorker.controller) {
+    navigator.serviceWorker.ready.then((reg) => {
+      reg.showNotification(title, options);
+    }).catch(() => {
+      try { new Notification(title, options); } catch (e) {}
+    });
+  } else {
+    try {
+      new Notification(title, options);
+    } catch (e) {}
   }
+}
+
+// Connect to SSE stream for immediate notification when app is in tab or background
+function connectNtfyStream() {
+  const topic = getMyTopic();
+  if (ntfyEventSource && currentListenTopic === topic) return;
+
+  if (ntfyEventSource) {
+    try { ntfyEventSource.close(); } catch (e) {}
+    ntfyEventSource = null;
+  }
+
+  currentListenTopic = topic;
+
+  try {
+    ntfyEventSource = new EventSource(`https://ntfy.sh/${topic}/sse`);
+    ntfyEventSource.onmessage = (event) => {
+      try {
+        const data = JSON.parse(event.data);
+        if (data.event === 'message') {
+          // If the app is currently hidden (user on home screen or another tab), show notification
+          if (document.hidden) {
+            showDisguisedNotification();
+          }
+        }
+      } catch (e) {}
+    };
+
+    ntfyEventSource.onerror = () => {
+      // Auto-reconnect managed by EventSource
+    };
+  } catch (err) {
+    console.warn('EventSource connection error:', err);
+  }
+}
+
+// Open ntfy 1-click web push subscriber for OS background push when app is completely closed
+function openBackgroundPushSetup() {
+  const topic = getMyTopic();
+  const url = `https://ntfy.sh/${topic}`;
+  window.open(url, '_blank');
+}
+
+// Request permission and start listener
+async function initNotifications() {
+  if (!('Notification' in window)) return;
+
+  if (Notification.permission === 'default') {
+    // Request permission gracefully on first interaction
+    const requestPerm = async () => {
+      try {
+        await Notification.requestPermission();
+      } catch (e) {}
+      window.removeEventListener('pointerdown', requestPerm);
+      window.removeEventListener('keydown', requestPerm);
+      connectNtfyStream();
+    };
+    window.addEventListener('pointerdown', requestPerm, { once: true });
+    window.addEventListener('keydown', requestPerm, { once: true });
+  } else {
+    connectNtfyStream();
+  }
+}
+
+// Handle role switches (user1 <-> user2)
+function syncPushRoleChange() {
+  connectNtfyStream();
 }

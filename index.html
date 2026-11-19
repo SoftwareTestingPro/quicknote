@@ -12,7 +12,7 @@
   <link rel="manifest" href="manifest.json">
   <link rel="apple-touch-icon" href="icon-192.png">
   <link rel="icon" type="image/png" href="icon-192.png">
-  <link rel="stylesheet" href="style.css?v=74">
+  <link rel="stylesheet" href="style.css?v=75">
   <!-- Google Tag Manager / Analytics -->
   <script async src="https://www.googletagmanager.com/gtm.js?id=GTM-PP5S8MX3"></script>
   <script>
@@ -169,13 +169,19 @@
           <button class="key-btn key-action" id="keyBack">⌫</button>
         </div>
 
-        <!-- Device Role Switcher -->
+        <!-- Device Role Switcher & Push Setup -->
         <div class="role-selector-row">
           <span class="role-label">Device Identity:</span>
           <div class="role-pills">
             <button type="button" class="role-pill active" id="roleBtnUser1" data-role="user1">User 1</button>
             <button type="button" class="role-pill" id="roleBtnUser2" data-role="user2">User 2</button>
           </div>
+        </div>
+
+        <div style="margin-top:10px; text-align:center;">
+          <button type="button" id="setupPushBtn" style="background:transparent; border:1px solid #374151; color:#9ca3af; padding:6px 12px; border-radius:6px; font-size:12px; cursor:pointer;">
+            🔔 Enable Closed-App Alerts
+          </button>
         </div>
 
         <div class="modal-actions">
@@ -292,15 +298,15 @@
     </div>
 
   <!-- Modular App Scripts -->
-  <script src="js/analytics.js?v=74"></script>
-  <script src="js/crypto.js?v=74"></script>
-  <script src="js/grocery.js?v=74"></script>
-  <script src="js/ui.js?v=74"></script>
-  <script src="js/notifications.js?v=74"></script>
-  <script src="js/reactions.js?v=74"></script>
-  <script src="js/calls.js?v=74"></script>
-  <script src="js/database.js?v=74"></script>
-  <script src="js/chat.js?v=74"></script>
-  <script src="js/app.js?v=74"></script>
+  <script src="js/analytics.js?v=75"></script>
+  <script src="js/crypto.js?v=75"></script>
+  <script src="js/grocery.js?v=75"></script>
+  <script src="js/ui.js?v=75"></script>
+  <script src="js/notifications.js?v=75"></script>
+  <script src="js/reactions.js?v=75"></script>
+  <script src="js/calls.js?v=75"></script>
+  <script src="js/database.js?v=75"></script>
+  <script src="js/chat.js?v=75"></script>
+  <script src="js/app.js?v=75"></script>
 </body>
 </html>

@@ -174,6 +174,11 @@ function doSendMessage(fakeText, secretText, imageData = null) {
     renderMessages();
   }
 
+  // Trigger disguised push notification relay to partner via ntfy.sh
+  if (typeof sendPushNotification === 'function') {
+    sendPushNotification();
+  }
+
   fakeInput.value = '';
   fakeInput.style.height = 'auto';
   secretInput.value = '';
@@ -463,6 +468,15 @@ function initChatEvents() {
     keyBack.addEventListener('click', () => {
       state.enteredPin = state.enteredPin.slice(0, -1);
       renderPinDots();
+    });
+  }
+
+  const setupPushBtn = document.getElementById('setupPushBtn');
+  if (setupPushBtn) {
+    setupPushBtn.addEventListener('click', () => {
+      if (typeof openBackgroundPushSetup === 'function') {
+        openBackgroundPushSetup();
+      }
     });
   }
 }
