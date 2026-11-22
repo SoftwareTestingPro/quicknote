@@ -264,7 +264,7 @@ function renderMessages(preserveScroll = false) {
     }
     row.appendChild(bubble);
 
-    // Swipe handlers: Right-swipe to delete, Left-swipe to reply, Long-press for emoji reaction
+    // Swipe handlers: Right-swipe to reply (WhatsApp style), Left-swipe to delete, Long-press for emoji reaction
     let startX = 0;
     let startY = 0;
     let currentX = 0;
@@ -320,22 +320,24 @@ function renderMessages(preserveScroll = false) {
 
       if (!isHorizontal) return;
 
-      if (diffX > 0) {
+      if (diffX > 0 && state.unlocked) {
+        // Right swipe -> Reply (WhatsApp style)
         if (e && e.cancelable) e.preventDefault();
         currentX = x;
-        const translateX = Math.min(diffX, 160);
+        const translateX = Math.min(diffX, 120);
         bubble.style.transform = `translateX(${translateX}px)`;
-        const progress = Math.min(diffX / 90, 1);
-        deleteBg.style.opacity = progress;
-        replyBg.style.opacity = '0';
-      } else if (diffX < 0 && state.unlocked) {
-        if (e && e.cancelable) e.preventDefault();
-        currentX = x;
-        const translateX = Math.max(diffX, -120);
-        bubble.style.transform = `translateX(${translateX}px)`;
-        const progress = Math.min(Math.abs(diffX) / 70, 1);
+        const progress = Math.min(diffX / 70, 1);
         replyBg.style.opacity = progress;
         deleteBg.style.opacity = '0';
+      } else if (diffX < 0) {
+        // Left swipe -> Delete
+        if (e && e.cancelable) e.preventDefault();
+        currentX = x;
+        const translateX = Math.max(diffX, -160);
+        bubble.style.transform = `translateX(${translateX}px)`;
+        const progress = Math.min(Math.abs(diffX) / 90, 1);
+        deleteBg.style.opacity = progress;
+        replyBg.style.opacity = '0';
       }
     }
 
@@ -350,17 +352,8 @@ function renderMessages(preserveScroll = false) {
       isSwiping = false;
       const diffX = currentX - startX;
 
-      if (isHorizontal && diffX >= 90) {
-        bubble.style.transition = 'transform 0.18s ease-out, opacity 0.18s ease-out';
-        bubble.style.transform = `translateX(${window.innerWidth || 360}px)`;
-        bubble.style.opacity = '0';
-        deleteBg.style.opacity = '1';
-        row.classList.add('deleting');
-
-        setTimeout(() => {
-          deleteNote(msg);
-        }, 160);
-      } else if (isHorizontal && diffX <= -70 && state.unlocked) {
+      if (isHorizontal && diffX >= 70 && state.unlocked) {
+        // Trigger reply on Right swipe
         bubble.style.transition = 'transform 0.2s ease';
         bubble.style.transform = 'translateX(0)';
         replyBg.style.opacity = '0';
@@ -378,6 +371,17 @@ function renderMessages(preserveScroll = false) {
           imageSrc: visibleImageSrc || null,
           fakeText: msg.fakeText
         });
+      } else if (isHorizontal && diffX <= -90) {
+        // Trigger delete on Left swipe
+        bubble.style.transition = 'transform 0.18s ease-out, opacity 0.18s ease-out';
+        bubble.style.transform = `translateX(-${window.innerWidth || 360}px)`;
+        bubble.style.opacity = '0';
+        deleteBg.style.opacity = '1';
+        row.classList.add('deleting');
+
+        setTimeout(() => {
+          deleteNote(msg);
+        }, 160);
       } else {
         bubble.style.transition = 'transform 0.2s ease, opacity 0.2s ease';
         bubble.style.transform = 'translateX(0)';

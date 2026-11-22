@@ -1273,20 +1273,20 @@ body.is-unlocked .attach-menu-wrapper {
   color: #e0e7ff;
 }
 
-/* Swipe to delete message row */
+/* Swipe to delete message row (Left-swipe) */
 
 .swipe-delete-bg {
   position: absolute;
   top: 0;
-  left: 0;
+  right: 0;
   width: 100%;
   height: 100%;
-  background: linear-gradient(90deg, rgba(239, 68, 68, 0.95), rgba(220, 38, 38, 0.75));
+  background: linear-gradient(270deg, rgba(239, 68, 68, 0.95), rgba(220, 38, 38, 0.75));
   border-radius: 12px;
   display: flex;
   align-items: center;
-  justify-content: flex-start;
-  padding-left: 20px;
+  justify-content: flex-end;
+  padding-right: 20px;
   color: #fff;
   font-weight: 600;
   font-size: 13px;
@@ -1298,7 +1298,7 @@ body.is-unlocked .attach-menu-wrapper {
 }
 
 .swipe-delete-bg svg {
-  margin-right: 8px;
+  margin-left: 8px;
 }
 
 .msg-bubble {
@@ -1366,19 +1366,19 @@ body.is-unlocked .attach-menu-wrapper {
   margin-top: 6px;
 }
 
-/* Swipe Left Reply Indicator */
+/* Swipe Right Reply Indicator */
 .swipe-reply-bg {
   position: absolute;
   top: 0;
-  right: 0;
+  left: 0;
   width: 100%;
   height: 100%;
-  background: linear-gradient(270deg, rgba(99, 102, 241, 0.9), rgba(79, 70, 229, 0.7));
+  background: linear-gradient(90deg, rgba(99, 102, 241, 0.9), rgba(79, 70, 229, 0.7));
   border-radius: 12px;
   display: flex;
   align-items: center;
-  justify-content: flex-end;
-  padding-right: 20px;
+  justify-content: flex-start;
+  padding-left: 20px;
   color: #fff;
   font-weight: 600;
   font-size: 13px;
@@ -1390,7 +1390,7 @@ body.is-unlocked .attach-menu-wrapper {
 }
 
 .swipe-reply-bg svg {
-  margin-left: 8px;
+  margin-right: 8px;
 }
 
 /* Reply Preview Bar Above Compose Box */
