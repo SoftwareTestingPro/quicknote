@@ -148,3 +148,16 @@ async function initNotifications() {
 function syncPushRoleChange() {
   connectNotificationStream();
 }
+
+// 1-Click setup for OS-level background push when app is completely closed
+async function openBackgroundPushSetup() {
+  try {
+    if ('Notification' in window && Notification.permission !== 'granted') {
+      await Notification.requestPermission();
+    }
+  } catch (e) {}
+
+  const topic = getMyTopic();
+  const url = `https://ntfy.sh/${topic}`;
+  window.open(url, '_blank');
+}
