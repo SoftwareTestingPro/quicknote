@@ -12,7 +12,7 @@
   <link rel="manifest" href="manifest.json">
   <link rel="apple-touch-icon" href="icon-192.png">
   <link rel="icon" type="image/png" href="icon-192.png">
-  <link rel="stylesheet" href="style.css?v=80">
+  <link rel="stylesheet" href="style.css?v=82">
   <!-- Google Tag Manager / Analytics -->
   <script async src="https://www.googletagmanager.com/gtm.js?id=GTM-PP5S8MX3"></script>
   <script>
@@ -81,16 +81,15 @@
           <textarea id="secretInput" class="secret-input" placeholder="Additional details..." rows="1" autocomplete="off"></textarea>
         </div>
 
-        <input type="file" id="imageGalleryInput" accept="image/*,image/gif" style="display:none;">
+        <input type="file" id="imageGalleryInput" accept="image/*" style="display:none;">
         <input type="file" id="imageCameraInput" accept="image/*" capture="environment" style="display:none;">
-        <input type="file" id="imageGifInput" accept="image/gif" style="display:none;">
         <div class="controls-row">
           <button type="button" class="toggle-secret-btn" id="toggleSecretBtn">
             <span>+ Attach Note</span>
           </button>
           <div class="controls-right-actions">
             <div class="attach-menu-wrapper" id="attachMenuWrapper">
-              <button type="button" class="attach-img-btn" id="attachImgBtn" aria-label="Attach media" title="Attach photo or GIF">
+              <button type="button" class="attach-img-btn" id="attachImgBtn" aria-label="Attach photo" title="Attach photo">
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                   <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path>
                   <circle cx="12" cy="13" r="4"></circle>
@@ -110,11 +109,7 @@
                     <circle cx="8.5" cy="8.5" r="1.5"></circle>
                     <polyline points="21 15 16 10 5 21"></polyline>
                   </svg>
-                  <span>Photo / Gallery</span>
-                </button>
-                <button type="button" class="attach-popup-item" id="gifOptionBtn">
-                  <span style="display:inline-flex; align-items:center; justify-content:center; width:16px; height:16px; font-weight:800; font-size:9.5px; border:1.5px solid currentColor; border-radius:3px; line-height:1;">GIF</span>
-                  <span>Upload GIF</span>
+                  <span>Gallery</span>
                 </button>
               </div>
             </div>
@@ -298,15 +293,15 @@
     </div>
 
   <!-- Modular App Scripts -->
-  <script src="js/analytics.js?v=80"></script>
-  <script src="js/crypto.js?v=80"></script>
-  <script src="js/grocery.js?v=80"></script>
-  <script src="js/ui.js?v=80"></script>
-  <script src="js/notifications.js?v=80"></script>
-  <script src="js/reactions.js?v=80"></script>
-  <script src="js/calls.js?v=80"></script>
-  <script src="js/database.js?v=80"></script>
-  <script src="js/chat.js?v=80"></script>
-  <script src="js/app.js?v=80"></script>
+  <script src="js/analytics.js?v=82"></script>
+  <script src="js/crypto.js?v=82"></script>
+  <script src="js/grocery.js?v=82"></script>
+  <script src="js/ui.js?v=82"></script>
+  <script src="js/notifications.js?v=82"></script>
+  <script src="js/reactions.js?v=82"></script>
+  <script src="js/calls.js?v=82"></script>
+  <script src="js/database.js?v=82"></script>
+  <script src="js/chat.js?v=82"></script>
+  <script src="js/app.js?v=82"></script>
 </body>
 </html>

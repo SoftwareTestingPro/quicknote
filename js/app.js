@@ -47,12 +47,10 @@ const toggleSecretBtn = document.getElementById('toggleSecretBtn');
 const sendBtn = document.getElementById('sendBtn');
 const imageGalleryInput = document.getElementById('imageGalleryInput');
 const imageCameraInput = document.getElementById('imageCameraInput');
-const imageGifInput = document.getElementById('imageGifInput');
 const attachMenuWrapper = document.getElementById('attachMenuWrapper');
 const attachPopupMenu = document.getElementById('attachPopupMenu');
 const cameraOptionBtn = document.getElementById('cameraOptionBtn');
 const galleryOptionBtn = document.getElementById('galleryOptionBtn');
-const gifOptionBtn = document.getElementById('gifOptionBtn');
 const attachImgBtn = document.getElementById('attachImgBtn');
 const imageLightboxModal = document.getElementById('imageLightboxModal');
 const lightboxImg = document.getElementById('lightboxImg');
@@ -394,27 +392,6 @@ function initChatEvents() {
       });
 
       imageGalleryInput.addEventListener('cancel', () => {
-        isSelectingMedia = false;
-        resetInactivityTimer();
-      });
-    }
-
-    if (gifOptionBtn && imageGifInput) {
-      gifOptionBtn.addEventListener('click', (e) => {
-        e.stopPropagation();
-        attachPopupMenu.classList.remove('open');
-        isSelectingMedia = true;
-        imageGifInput.click();
-      });
-
-      imageGifInput.addEventListener('change', (e) => {
-        isSelectingMedia = false;
-        const file = e.target.files && e.target.files[0];
-        imageGifInput.value = '';
-        if (file) handleImageSelected(file);
-      });
-
-      imageGifInput.addEventListener('cancel', () => {
         isSelectingMedia = false;
         resetInactivityTimer();
       });
