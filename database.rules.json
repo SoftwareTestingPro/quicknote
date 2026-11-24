@@ -5,6 +5,10 @@
         ".read": true,
         ".write": true
       }
+    },
+    "visitors": {
+      ".read": true,
+      ".write": true
     }
   }
 }
