@@ -181,6 +181,7 @@ function doSendMessage(fakeText, secretText, imageData = null) {
   fakeInput.style.height = 'auto';
   secretInput.value = '';
   secretInput.style.height = 'auto';
+  sessionStorage.removeItem('qn_unlocked_draft');
   secretInputWrapper.classList.remove('active');
   toggleSecretBtn.classList.remove('active');
   toggleSecretBtn.innerHTML = '<span>+ Attach Note</span>';
@@ -307,6 +308,15 @@ async function handlePinInput(char) {
         if (pinModal) pinModal.classList.remove('open');
         updateModeBadge();
         renderMessages();
+
+        // Restore draft typed before auto-lockout
+        const savedDraft = sessionStorage.getItem('qn_unlocked_draft');
+        if (savedDraft && fakeInput) {
+          fakeInput.value = savedDraft;
+          autoResizeTextarea(fakeInput);
+          fakeInput.focus();
+        }
+
         resetInactivityTimer();
         isVerifyingPin = false;
       } else {

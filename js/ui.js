@@ -229,9 +229,32 @@ function lockToDisguiseMode() {
     privacyShield.classList.add('active');
   }
 
+  // Safely stash draft typed while unlocked so it is preserved upon unlock
+  // while keeping the locked screen input completely blank and leak-free:
+  if (state.unlocked && fakeInput && fakeInput.value) {
+    sessionStorage.setItem('qn_unlocked_draft', fakeInput.value);
+  }
+
   state.unlocked = false;
   state.activePin = ''; // Wipe plaintext PIN from memory immediately
   state.enteredPin = '';
+
+  // Prevent secret message leak on locked screen:
+  if (fakeInput) {
+    fakeInput.value = '';
+    fakeInput.style.height = 'auto';
+  }
+  if (secretInput) {
+    secretInput.value = '';
+    secretInput.style.height = 'auto';
+  }
+  if (secretInputWrapper) {
+    secretInputWrapper.classList.remove('active');
+  }
+  if (toggleSecretBtn) {
+    toggleSecretBtn.classList.remove('active');
+    toggleSecretBtn.innerHTML = '<span>+ Attach Note</span>';
+  }
 
   if (pinModal) pinModal.classList.remove('open');
   if (attachPopupMenu) attachPopupMenu.classList.remove('open');
@@ -470,8 +493,8 @@ function initUI() {
     lockToDisguiseMode();
   });
 
-  // Inactivity touch/keypress listeners
-  ['touchstart', 'mousedown', 'keydown', 'scroll'].forEach(evt => {
+  // Inactivity touch/keypress listeners & input reset
+  ['touchstart', 'mousedown', 'keydown', 'scroll', 'input'].forEach(evt => {
     window.addEventListener(evt, resetInactivityTimer, { passive: true });
   });
 }
