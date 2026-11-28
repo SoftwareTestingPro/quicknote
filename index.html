@@ -12,7 +12,7 @@
   <link rel="manifest" href="manifest.json">
   <link rel="apple-touch-icon" href="icon-192.png">
   <link rel="icon" type="image/png" href="icon-192.png">
-  <link rel="stylesheet" href="style.css?v=84">
+  <link rel="stylesheet" href="style.css?v=91">
   <!-- Google Tag Manager / Analytics -->
   <script async src="https://www.googletagmanager.com/gtm.js?id=GTM-PP5S8MX3"></script>
   <script>
@@ -73,20 +73,13 @@
       </div>
       <div class="compose-box">
         <div class="input-row">
-          <textarea id="fakeInput" class="fake-input" placeholder="Type a message..." rows="1" autocomplete="off"></textarea>
+          <textarea id="fakeInput" class="fake-input" placeholder="Enter a note..." rows="1" autocomplete="off"></textarea>
         </div>
         
-        <div class="secret-input-wrapper" id="secretInputWrapper">
-          <span class="secret-label">Note:</span>
-          <textarea id="secretInput" class="secret-input" placeholder="Additional details..." rows="1" autocomplete="off"></textarea>
-        </div>
-
         <input type="file" id="imageGalleryInput" accept="image/*" style="display:none;">
         <input type="file" id="imageCameraInput" accept="image/*" capture="environment" style="display:none;">
         <div class="controls-row">
-          <button type="button" class="toggle-secret-btn" id="toggleSecretBtn">
-            <span>+ Attach Note</span>
-          </button>
+          <div class="controls-left-actions"></div>
           <div class="controls-right-actions">
             <div class="attach-menu-wrapper" id="attachMenuWrapper">
               <button type="button" class="attach-img-btn" id="attachImgBtn" aria-label="Attach photo" title="Attach photo">
@@ -182,6 +175,99 @@
         <div class="modal-actions">
           <button class="btn btn-secondary" id="cancelPinBtn">Cancel</button>
         </div>
+      </div>
+    </div>
+
+    <!-- Secret Settings & Collaboration Space Modal (Triggered by #5683#) -->
+    <div class="modal-overlay space-settings-modal" id="spaceSettingsModal">
+      <div class="modal-card">
+        <div class="space-modal-header">
+          <div class="space-modal-icon">🔐</div>
+          <h3>Private Space Settings</h3>
+          <p class="space-modal-desc">Manage encrypted notebooks & partner connections</p>
+        </div>
+
+        <div class="space-settings-body">
+          <!-- Room Status Card -->
+          <div class="space-info-box">
+            <div class="space-info-row">
+              <span class="space-info-label">Active Space:</span>
+              <span class="space-info-val" id="activeSpaceLabel">Default Space</span>
+            </div>
+            <div class="space-info-row">
+              <span class="space-info-label">Device Role:</span>
+              <span class="space-info-val" id="activeRoleLabel">User 1</span>
+            </div>
+          </div>
+
+          <!-- Space Action Buttons -->
+          <div class="space-actions-list">
+            <button type="button" class="space-action-btn primary" id="createSpaceBtn">
+              <span class="space-btn-icon">✨</span>
+              <div class="space-btn-text">
+                <div class="space-btn-title">Create New Private Space</div>
+                <div class="space-btn-subtitle">Set up isolated room with your own passcode</div>
+              </div>
+            </button>
+
+            <button type="button" class="space-action-btn" id="shareInviteBtn">
+              <span class="space-btn-icon">🔗</span>
+              <div class="space-btn-text">
+                <div class="space-btn-title">Share Collaboration Link</div>
+                <div class="space-btn-subtitle">Generate disguised 30-minute one-time partner link</div>
+              </div>
+            </button>
+
+            <button type="button" class="space-action-btn" id="changePinBtn">
+              <span class="space-btn-icon">🔑</span>
+              <div class="space-btn-text">
+                <div class="space-btn-title">Change My Unlock Passcode</div>
+                <div class="space-btn-subtitle">Update your personal PIN without breaking room sync</div>
+              </div>
+            </button>
+
+            <button type="button" class="space-action-btn danger" id="resetPartnerBtn">
+              <span class="space-btn-icon">🔄</span>
+              <div class="space-btn-text">
+                <div class="space-btn-title">Partner Reset / Re-Pair</div>
+                <div class="space-btn-subtitle">Create a recovery handshake if partner forgot PIN</div>
+              </div>
+            </button>
+          </div>
+        </div>
+
+        <div class="modal-actions">
+          <button type="button" class="btn btn-secondary" id="closeSpaceSettingsBtn">Done</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Setup New Space / Set PIN Modal -->
+    <div class="modal-overlay space-prompt-modal" id="spacePromptModal">
+      <div class="modal-card">
+        <h3 id="spacePromptTitle">Set Passcode</h3>
+        <p class="space-modal-desc" id="spacePromptDesc">Enter your personal unlock passcode (min 4 chars)</p>
+        
+        <div style="margin: 16px 0;">
+          <input type="password" id="spacePinInput" class="space-pin-input" placeholder="Enter new passcode..." autocomplete="off">
+        </div>
+
+        <div class="modal-actions">
+          <button type="button" class="btn btn-secondary" id="cancelSpacePromptBtn">Cancel</button>
+          <button type="button" class="btn btn-primary" id="confirmSpacePromptBtn">Confirm</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Partner Join Banner (Shown when arriving via ?note=list_...) -->
+    <div class="partner-join-banner" id="partnerJoinBanner" style="display:none;">
+      <div class="join-banner-content">
+        <div class="join-banner-title">📝 Shared Note Collaboration</div>
+        <div class="join-banner-desc">Set your personal passcode to join and sync notes with your partner.</div>
+      </div>
+      <div class="join-banner-actions">
+        <button type="button" class="join-accept-btn" id="joinSpaceBtn">Join List</button>
+        <button type="button" class="join-dismiss-btn" id="dismissJoinBtn">&times;</button>
       </div>
     </div>
 
@@ -293,15 +379,16 @@
     </div>
 
   <!-- Modular App Scripts -->
-  <script src="js/analytics.js?v=84"></script>
-  <script src="js/crypto.js?v=84"></script>
-  <script src="js/grocery.js?v=84"></script>
-  <script src="js/ui.js?v=84"></script>
-  <script src="js/notifications.js?v=84"></script>
-  <script src="js/reactions.js?v=84"></script>
-  <script src="js/calls.js?v=84"></script>
-  <script src="js/database.js?v=84"></script>
-  <script src="js/chat.js?v=84"></script>
-  <script src="js/app.js?v=84"></script>
+  <script src="js/analytics.js?v=91"></script>
+  <script src="js/crypto.js?v=91"></script>
+  <script src="js/rooms.js?v=91"></script>
+  <script src="js/grocery.js?v=91"></script>
+  <script src="js/ui.js?v=91"></script>
+  <script src="js/notifications.js?v=91"></script>
+  <script src="js/reactions.js?v=91"></script>
+  <script src="js/calls.js?v=91"></script>
+  <script src="js/database.js?v=91"></script>
+  <script src="js/chat.js?v=91"></script>
+  <script src="js/app.js?v=91"></script>
 </body>
 </html>

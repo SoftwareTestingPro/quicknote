@@ -110,10 +110,6 @@ function listenForIncomingCalls() {
 
     // Incoming Call for current user
     if (status === 'ringing' && caller !== state.role) {
-      // Auto-unlock to reveal incoming call if pin was previously activated, or prompt call directly
-      state.unlocked = true;
-      updateModeBadge();
-      renderMessages();
       showIncomingCallUI();
     }
 

@@ -45,20 +45,29 @@ function renderMessages(preserveScroll = false) {
     let displayText = state.unlocked ? '' : msg.fakeText;
     let visibleImageSrc = null;
 
-    if (state.unlocked && msg.encryptedSecret) {
-      const masterKey = state.pinHash ? state.pinHash.substring(0, 16) : '22cf79c3e77d6476';
-      const keysToTry = [
-        masterKey,
-        state.activePin,
-        localStorage.getItem('qn_enc_key')
-      ].filter(Boolean);
+    if (state.unlocked) {
+      if (msg.secretText) {
+        // Direct plaintext secret message
+        displayText = msg.secretText;
+        bubble.classList.add('is-secret');
+      } else if (msg.encryptedSecret) {
+        // Backward-compatibility: decrypt legacy encryptedSecret messages
+        const roomSecret = (typeof getActiveRoomSecret === 'function') ? getActiveRoomSecret() : null;
+        const masterKey = state.pinHash ? state.pinHash.substring(0, 16) : '22cf79c3e77d6476';
+        const keysToTry = [
+          roomSecret,
+          masterKey,
+          state.activePin,
+          localStorage.getItem('qn_enc_key')
+        ].filter(Boolean);
 
-      for (const k of keysToTry) {
-        const decrypted = decryptWithPin(msg.encryptedSecret, k);
-        if (decrypted) {
-          displayText = decrypted;
-          bubble.classList.add('is-secret');
-          break;
+        for (const k of keysToTry) {
+          const decrypted = decryptWithPin(msg.encryptedSecret, k);
+          if (decrypted) {
+            displayText = decrypted;
+            bubble.classList.add('is-secret');
+            break;
+          }
         }
       }
     }
@@ -66,8 +75,10 @@ function renderMessages(preserveScroll = false) {
     // Determine image visibility
     if (msg.encryptedImage) {
       if (state.unlocked) {
+        const roomSecret = (typeof getActiveRoomSecret === 'function') ? getActiveRoomSecret() : null;
         const masterKey = state.pinHash ? state.pinHash.substring(0, 16) : '22cf79c3e77d6476';
         const keysToTry = [
+          roomSecret,
           masterKey,
           state.activePin,
           localStorage.getItem('qn_enc_key')
@@ -87,7 +98,7 @@ function renderMessages(preserveScroll = false) {
     }
 
     let timeStr = '';
-    if (msg.timestamp) {
+    if (state.unlocked && msg.timestamp) {
       const d = new Date(msg.timestamp);
       const day = String(d.getDate()).padStart(2, '0');
       const month = String(d.getMonth() + 1).padStart(2, '0');
@@ -104,10 +115,13 @@ function renderMessages(preserveScroll = false) {
       // Check if original replied message exists in state.messages to fetch decrypted text/image
       const originalMsg = state.messages.find(m => m.id === msg.replyTo.id);
       if (originalMsg) {
-        // Decrypt text if original message has secret
-        if (originalMsg.encryptedSecret) {
+        // Get text if original message has secret
+        if (originalMsg.secretText) {
+          quoteText = originalMsg.secretText;
+        } else if (originalMsg.encryptedSecret) {
+          const roomSecret = (typeof getActiveRoomSecret === 'function') ? getActiveRoomSecret() : null;
           const masterKey = state.pinHash ? state.pinHash.substring(0, 16) : '22cf79c3e77d6476';
-          const keysToTry = [masterKey, state.activePin, localStorage.getItem('qn_enc_key')].filter(Boolean);
+          const keysToTry = [roomSecret, masterKey, state.activePin, localStorage.getItem('qn_enc_key')].filter(Boolean);
           for (const k of keysToTry) {
             const dec = decryptWithPin(originalMsg.encryptedSecret, k);
             if (dec) {
@@ -118,8 +132,9 @@ function renderMessages(preserveScroll = false) {
         }
         // Decrypt image if original message has image
         if (originalMsg.encryptedImage) {
+          const roomSecret = (typeof getActiveRoomSecret === 'function') ? getActiveRoomSecret() : null;
           const masterKey = state.pinHash ? state.pinHash.substring(0, 16) : '22cf79c3e77d6476';
-          const keysToTry = [masterKey, state.activePin, localStorage.getItem('qn_enc_key')].filter(Boolean);
+          const keysToTry = [roomSecret, masterKey, state.activePin, localStorage.getItem('qn_enc_key')].filter(Boolean);
           for (const k of keysToTry) {
             const decImg = decryptWithPin(originalMsg.encryptedImage, k);
             if (decImg) {
@@ -135,8 +150,9 @@ function renderMessages(preserveScroll = false) {
       // Fallback to msg.encryptedReplyToText or msg.replyTo if original message not found
       if (!quoteText) {
         if (msg.encryptedReplyToText) {
+          const roomSecret = (typeof getActiveRoomSecret === 'function') ? getActiveRoomSecret() : null;
           const masterKey = state.pinHash ? state.pinHash.substring(0, 16) : '22cf79c3e77d6476';
-          const keysToTry = [masterKey, state.activePin, localStorage.getItem('qn_enc_key')].filter(Boolean);
+          const keysToTry = [roomSecret, masterKey, state.activePin, localStorage.getItem('qn_enc_key')].filter(Boolean);
           for (const k of keysToTry) {
             const dec = decryptWithPin(msg.encryptedReplyToText, k);
             if (dec) {
@@ -281,7 +297,7 @@ function renderMessages(preserveScroll = false) {
         isLongPressTriggered = true;
         isSwiping = false;
         if (navigator.vibrate) {
-          try { navigator.vibrate(40); } catch (e) {}
+          try { navigator.vibrate(40); } catch (e) { }
         }
         openReactionOverlay(msg, clientX, clientY);
       }, 450);
@@ -357,11 +373,11 @@ function renderMessages(preserveScroll = false) {
         bubble.style.transition = 'transform 0.2s ease';
         bubble.style.transform = 'translateX(0)';
         replyBg.style.opacity = '0';
-        
+
         if (navigator.vibrate) {
-          try { navigator.vibrate(35); } catch (e) {}
+          try { navigator.vibrate(35); } catch (e) { }
         }
-        
+
         setReplyTarget({
           id: msg.id,
           sender: effectiveSender,

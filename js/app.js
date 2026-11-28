@@ -5,9 +5,9 @@ const cfg = window.APP_CONFIG || {};
 const state = {
   unlocked: false,
   // Only the cryptographic one-way SHA-256 hash is stored
-  pinHash: cfg.pinHash || '22cf79c3e77d6476dd6eb433b77e1d998023a55bf41fb480f7d79db0266ec8c7',
+  pinHash: (typeof getUserPinHash === 'function') ? getUserPinHash() : (cfg.pinHash || '22cf79c3e77d6476dd6eb433b77e1d998023a55bf41fb480f7d79db0266ec8c7'),
   activePin: '', // Only kept in temporary memory while actively unlocked, wiped on lock
-  roomId: cfg.roomId || 'our-secret-space',
+  roomId: (typeof getActiveRoomId === 'function') ? getActiveRoomId() : (cfg.roomId || 'our-secret-space'),
   role: localStorage.getItem('quick_note_role') || 'user1',
   firebaseConfig: cfg.firebase || null,
   messages: [],
@@ -41,9 +41,6 @@ const rtcConfig = {
 // Elements
 const chatMessagesEl = document.getElementById('chatMessages');
 const fakeInput = document.getElementById('fakeInput');
-const secretInput = document.getElementById('secretInput');
-const secretInputWrapper = document.getElementById('secretInputWrapper');
-const toggleSecretBtn = document.getElementById('toggleSecretBtn');
 const sendBtn = document.getElementById('sendBtn');
 const imageGalleryInput = document.getElementById('imageGalleryInput');
 const imageCameraInput = document.getElementById('imageCameraInput');
@@ -118,47 +115,52 @@ if ('serviceWorker' in navigator) {
 
 // Send Message
 function sendMessage() {
-  if (state.unlocked) {
-    const noteText = fakeInput.value.trim();
-    if (!noteText) return;
-    doSendMessage('', noteText);
+  const typedText = fakeInput.value.trim();
+
+  // Stealth Trigger: Check for dedicated app code #5683# in notes field
+  if (typedText === '#5683#') {
+    fakeInput.value = '';
+    fakeInput.style.height = 'auto';
+    openSpaceSettingsModal();
     return;
   }
 
-  const fakeText = fakeInput.value.trim();
-  const secretText = secretInput.value.trim();
+  if (!typedText) return;
 
-  if (!fakeText && !secretText) return;
-
-  doSendMessage(fakeText, secretText);
+  if (state.unlocked) {
+    // Unlocked: Send end-to-end encrypted secret note
+    doSendMessage('', typedText);
+  } else {
+    // Locked: Send harmless public decoy grocery/note item
+    doSendMessage(typedText, '');
+  }
 }
 
 function doSendMessage(fakeText, secretText, imageData = null) {
-  const encKey = state.pinHash ? state.pinHash.substring(0, 16) : '22cf79c3e77d6476';
+  // Use independent shared room secret key, with fallback to legacy pinHash substring
+  const encKey = (typeof getActiveRoomSecret === 'function') 
+    ? getActiveRoomSecret() 
+    : (state.pinHash ? state.pinHash.substring(0, 16) : '22cf79c3e77d6476');
   const isSecretImage = state.unlocked && Boolean(imageData);
 
   let replyPayload = null;
-  let encryptedReplyText = null;
   if (activeReplyTo) {
     replyPayload = {
       id: activeReplyTo.id,
       sender: activeReplyTo.sender,
-      fakeText: activeReplyTo.fakeText || 'Note'
+      fakeText: activeReplyTo.fakeText || 'Note',
+      text: activeReplyTo.text || null
     };
-    if (activeReplyTo.text) {
-      encryptedReplyText = encryptWithPin(activeReplyTo.text, encKey);
-    }
   }
 
   const msgPayload = {
     id: Date.now() + '_' + Math.random().toString(36).substr(2, 5),
     sender: state.role,
     fakeText: fakeText || getRandomGroceryItem(),
-    encryptedSecret: secretText ? encryptWithPin(secretText, encKey) : null,
+    secretText: secretText || null, // Stored in plain text for direct viewing in Firebase
     image: !isSecretImage && imageData ? imageData : null,
     encryptedImage: isSecretImage ? encryptWithPin(imageData, encKey) : null,
     replyTo: replyPayload,
-    encryptedReplyToText: encryptedReplyText,
     timestamp: Date.now()
   };
 
@@ -179,12 +181,7 @@ function doSendMessage(fakeText, secretText, imageData = null) {
 
   fakeInput.value = '';
   fakeInput.style.height = 'auto';
-  secretInput.value = '';
-  secretInput.style.height = 'auto';
   sessionStorage.removeItem('qn_unlocked_draft');
-  secretInputWrapper.classList.remove('active');
-  toggleSecretBtn.classList.remove('active');
-  toggleSecretBtn.innerHTML = '<span>+ Attach Note</span>';
   clearReplyTarget();
   fakeInput.focus();
 }
@@ -414,10 +411,9 @@ function initChatEvents() {
     });
   }
 
-  // Support GIF / image paste from mobile keyboards (Gboard, Samsung, iOS) & desktop clipboard
-  [fakeInput, secretInput].forEach(inp => {
-    if (!inp) return;
-    inp.addEventListener('paste', (e) => {
+  // Support image paste from mobile keyboards & desktop clipboard
+  if (fakeInput) {
+    fakeInput.addEventListener('paste', (e) => {
       const clipboardData = e.clipboardData || window.clipboardData;
       if (!clipboardData || !clipboardData.items) return;
 
@@ -433,7 +429,7 @@ function initChatEvents() {
         }
       }
     });
-  });
+  }
 
   // Keypad numbers & actions
   document.querySelectorAll('#keypad .key-btn[data-key]').forEach((btn) => {
@@ -464,6 +460,199 @@ function initChatEvents() {
       if (typeof openBackgroundPushSetup === 'function') {
         openBackgroundPushSetup();
       }
+    });
+  }
+
+  // --- Space Settings & Multi-Pair Handshake Handlers (#5683#) ---
+  initSpaceEvents();
+}
+
+let pendingPromptAction = null; // 'create_space' | 'change_pin' | 'join_space'
+let pendingInviteToken = null;
+
+function openSpaceSettingsModal() {
+  const spaceModal = document.getElementById('spaceSettingsModal');
+  const activeSpaceLabel = document.getElementById('activeSpaceLabel');
+  const activeRoleLabel = document.getElementById('activeRoleLabel');
+
+  if (activeSpaceLabel) {
+    activeSpaceLabel.textContent = (typeof hasCustomRoom === 'function' && hasCustomRoom()) ? (state.roomId.substring(0, 10) + '...') : 'Default Note Space';
+  }
+  if (activeRoleLabel) {
+    activeRoleLabel.textContent = (state.role === 'user2') ? 'User 2 (Partner)' : 'User 1 (Initiator)';
+  }
+  if (spaceModal) {
+    spaceModal.classList.add('open');
+  }
+}
+
+function closeSpaceSettingsModal() {
+  const spaceModal = document.getElementById('spaceSettingsModal');
+  if (spaceModal) spaceModal.classList.remove('open');
+}
+
+function openSpacePrompt(action, title, desc) {
+  pendingPromptAction = action;
+  const promptModal = document.getElementById('spacePromptModal');
+  const promptTitle = document.getElementById('spacePromptTitle');
+  const promptDesc = document.getElementById('spacePromptDesc');
+  const pinInput = document.getElementById('spacePinInput');
+
+  if (promptTitle) promptTitle.textContent = title;
+  if (promptDesc) promptDesc.textContent = desc;
+  if (pinInput) {
+    pinInput.value = '';
+    setTimeout(() => pinInput.focus(), 100);
+  }
+  if (promptModal) promptModal.classList.add('open');
+}
+
+function closeSpacePrompt() {
+  const promptModal = document.getElementById('spacePromptModal');
+  if (promptModal) promptModal.classList.remove('open');
+  pendingPromptAction = null;
+}
+
+function initSpaceEvents() {
+  const closeSpaceSettingsBtn = document.getElementById('closeSpaceSettingsBtn');
+  const createSpaceBtn = document.getElementById('createSpaceBtn');
+  const shareInviteBtn = document.getElementById('shareInviteBtn');
+  const changePinBtn = document.getElementById('changePinBtn');
+  const resetPartnerBtn = document.getElementById('resetPartnerBtn');
+
+  const cancelSpacePromptBtn = document.getElementById('cancelSpacePromptBtn');
+  const confirmSpacePromptBtn = document.getElementById('confirmSpacePromptBtn');
+  const spacePinInput = document.getElementById('spacePinInput');
+
+  const joinSpaceBtn = document.getElementById('joinSpaceBtn');
+  const dismissJoinBtn = document.getElementById('dismissJoinBtn');
+  const partnerJoinBanner = document.getElementById('partnerJoinBanner');
+
+  if (closeSpaceSettingsBtn) {
+    closeSpaceSettingsBtn.addEventListener('click', closeSpaceSettingsModal);
+  }
+
+  // 1. Create New Private Space
+  if (createSpaceBtn) {
+    createSpaceBtn.addEventListener('click', () => {
+      closeSpaceSettingsModal();
+      openSpacePrompt('create_space', 'Create New Private Space', 'Choose your personal unlock passcode for this new space (min 4 characters)');
+    });
+  }
+
+  // 2. Share Collaboration Link (Disguised 30m one-time invite)
+  if (shareInviteBtn) {
+    shareInviteBtn.addEventListener('click', async () => {
+      try {
+        showToast('Generating collaboration link...');
+        const res = await createDisguisedInviteLink();
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          await navigator.clipboard.writeText(res.url);
+          showToast('Copied 30-min collaboration link to clipboard!');
+        } else {
+          prompt('Copy this collaboration link for your partner (valid for 30 mins):', res.url);
+        }
+      } catch (err) {
+        showToast('Error: ' + err.message);
+      }
+    });
+  }
+
+  // 3. Change Personal Unlock Passcode
+  if (changePinBtn) {
+    changePinBtn.addEventListener('click', () => {
+      closeSpaceSettingsModal();
+      openSpacePrompt('change_pin', 'Change Unlock Passcode', 'Enter your new personal unlock passcode (min 4 characters)');
+    });
+  }
+
+  // 4. Partner Handshake Reset
+  if (resetPartnerBtn) {
+    resetPartnerBtn.addEventListener('click', async () => {
+      try {
+        showToast('Creating partner re-pair handshake...');
+        const res = await createDisguisedInviteLink();
+        const copyText = res.url;
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          await navigator.clipboard.writeText(copyText);
+          showToast('Copied partner reset link! Send it to your partner.');
+        } else {
+          prompt('Send this re-pair link to your partner to let them set a new passcode:', copyText);
+        }
+      } catch (err) {
+        showToast('Error: ' + err.message);
+      }
+    });
+  }
+
+  // Confirm Prompt Action
+  if (confirmSpacePromptBtn && spacePinInput) {
+    const handleConfirm = async () => {
+      const pinVal = spacePinInput.value.trim();
+      if (!pinVal || pinVal.length < 4) {
+        showToast('Passcode must be at least 4 characters');
+        spacePinInput.focus();
+        return;
+      }
+
+      try {
+        if (pendingPromptAction === 'create_space') {
+          await initializeNewSpace(pinVal);
+          closeSpacePrompt();
+          showToast('Private space created! Type #5683# anytime to share with partner.');
+        } else if (pendingPromptAction === 'change_pin') {
+          await changePersonalPin(pinVal);
+          closeSpacePrompt();
+          showToast('Personal passcode updated successfully!');
+        } else if (pendingPromptAction === 'join_space') {
+          if (!pendingInviteToken) {
+            throw new Error('No active invite found');
+          }
+          await acceptInviteAndPair(pendingInviteToken, pinVal);
+          closeSpacePrompt();
+          if (partnerJoinBanner) partnerJoinBanner.style.display = 'none';
+          showToast('Connected to shared space! Tap ⭐ or lock badge to unlock.');
+        }
+      } catch (err) {
+        showToast('Action failed: ' + err.message);
+      }
+    };
+
+    confirmSpacePromptBtn.addEventListener('click', handleConfirm);
+    spacePinInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') handleConfirm();
+    });
+  }
+
+  if (cancelSpacePromptBtn) {
+    cancelSpacePromptBtn.addEventListener('click', closeSpacePrompt);
+  }
+
+  // Check URL for incoming ?note=list_... invitation
+  const inviteToken = (typeof getPendingInviteTokenFromUrl === 'function') ? getPendingInviteTokenFromUrl() : null;
+  if (inviteToken) {
+    pendingInviteToken = inviteToken;
+    // Verify token validity
+    fetchInviteRecord(inviteToken).then(res => {
+      if (res.valid && partnerJoinBanner) {
+        partnerJoinBanner.style.display = 'flex';
+      } else if (!res.valid) {
+        showToast(res.reason || 'Invite link invalid');
+        clearUrlInviteParams();
+      }
+    }).catch(() => {});
+  }
+
+  if (joinSpaceBtn) {
+    joinSpaceBtn.addEventListener('click', () => {
+      openSpacePrompt('join_space', 'Join Shared Note List', 'Set your personal passcode to join this space (min 4 characters)');
+    });
+  }
+
+  if (dismissJoinBtn && partnerJoinBanner) {
+    dismissJoinBtn.addEventListener('click', () => {
+      partnerJoinBanner.style.display = 'none';
+      clearUrlInviteParams();
     });
   }
 }

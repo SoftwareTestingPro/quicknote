@@ -191,7 +191,7 @@ function updateModeBadge() {
     modeBadge.className = 'mode-badge locked';
     lockIcon.textContent = '⭐';
     lockLabel.textContent = 'Go Premium';
-    fakeInput.placeholder = 'Type a message...';
+    fakeInput.placeholder = 'Enter a note...';
     if (callBtn) callBtn.classList.add('hidden');
     // If locked while in a call or incoming call, safely end/decline
     if (callState.isCallActive || callState.currentCallId) {
@@ -243,17 +243,6 @@ function lockToDisguiseMode() {
   if (fakeInput) {
     fakeInput.value = '';
     fakeInput.style.height = 'auto';
-  }
-  if (secretInput) {
-    secretInput.value = '';
-    secretInput.style.height = 'auto';
-  }
-  if (secretInputWrapper) {
-    secretInputWrapper.classList.remove('active');
-  }
-  if (toggleSecretBtn) {
-    toggleSecretBtn.classList.remove('active');
-    toggleSecretBtn.innerHTML = '<span>+ Attach Note</span>';
   }
 
   if (pinModal) pinModal.classList.remove('open');
@@ -310,7 +299,7 @@ function initUI() {
       if (window.scrollY !== 0 || window.scrollX !== 0) {
         window.scrollTo(0, 0);
       }
-      if (document.activeElement && (document.activeElement.id === 'fakeInput' || document.activeElement.id === 'secretInput')) {
+      if (document.activeElement && document.activeElement.id === 'fakeInput') {
         chatMessagesEl.scrollTop = chatMessagesEl.scrollHeight;
       }
     };
@@ -324,15 +313,14 @@ function initUI() {
     updateViewportHeight();
   }
 
-  [fakeInput, secretInput].forEach(inp => {
-    if (!inp) return;
-    inp.addEventListener('focus', () => {
+  if (fakeInput) {
+    fakeInput.addEventListener('focus', () => {
       setTimeout(() => {
         window.scrollTo(0, 0);
         chatMessagesEl.scrollTop = chatMessagesEl.scrollHeight;
       }, 300);
     });
-  });
+  }
 
   // Role button switchers
   if (roleBtnUser1 && roleBtnUser2) {
@@ -366,28 +354,6 @@ function initUI() {
       setTimeout(() => autoResizeTextarea(fakeInput), 0);
     });
   }
-  if (secretInput) {
-    secretInput.addEventListener('input', () => autoResizeTextarea(secretInput));
-    secretInput.addEventListener('keydown', () => {
-      setTimeout(() => autoResizeTextarea(secretInput), 0);
-    });
-  }
-
-  // Toggle secret field button
-  if (toggleSecretBtn) {
-    toggleSecretBtn.addEventListener('click', () => {
-      const isActive = secretInputWrapper.classList.toggle('active');
-      toggleSecretBtn.classList.toggle('active', isActive);
-      if (isActive) {
-        secretInput.focus();
-        toggleSecretBtn.innerHTML = '<span>✕ Remove Note</span>';
-      } else {
-        secretInput.value = '';
-        toggleSecretBtn.innerHTML = '<span>+ Attach Note</span>';
-      }
-    });
-  }
-
   // Lightbox handlers
   if (lightboxCloseBtn) {
     lightboxCloseBtn.addEventListener('click', closeLightbox);

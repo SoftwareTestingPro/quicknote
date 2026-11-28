@@ -1,0 +1,8 @@
+# Local developer tools & security configs
+viewer.html
+database.rules.json
+
+# Logs & temp files
+*.log
+.DS_Store
+Thumbs.db
